@@ -7,7 +7,6 @@ export default function ReelsFeed({ onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isVideoReady, setIsVideoReady] = useState(false);
   const containerRef = useRef(null);
   const videoRefs = useRef({});
   const touchStartY = useRef(0);
@@ -109,20 +108,29 @@ export default function ReelsFeed({ onClose }) {
     };
   }, [videos.length, currentIndex]);
 
+  // Pause all videos except the active one
+  const pauseAllVideos = (exceptVideoId) => {
+    Object.keys(videoRefs.current).forEach((videoId) => {
+      if (videoId !== exceptVideoId) {
+        const iframe = videoRefs.current[videoId];
+        if (iframe) {
+          iframe.contentWindow?.postMessage(
+            '{"event":"command","func":"pauseVideo","args":""}',
+            '*'
+          );
+        }
+      }
+    });
+  };
+
   const goToNext = () => {
     if (currentIndex < videos.length - 1 && !isTransitioning.current) {
       isTransitioning.current = true;
       const newIndex = currentIndex + 1;
       setCurrentIndex(newIndex);
-      setIsVideoReady(false);
       
-      const currentVideo = videos[currentIndex];
-      if (currentVideo && videoRefs.current[currentVideo.id]) {
-        videoRefs.current[currentVideo.id]?.contentWindow?.postMessage(
-          '{"event":"command","func":"pauseVideo","args":""}',
-          '*'
-        );
-      }
+      // Pause all videos except the current one
+      pauseAllVideos(videos[newIndex]?.id);
       
       const container = containerRef.current;
       if (container) {
@@ -147,11 +155,10 @@ export default function ReelsFeed({ onClose }) {
               '{"event":"command","func":"playVideo","args":""}',
               '*'
             );
-            setIsVideoReady(true);
-          }, 200);
+          }, 100);
         }
         isTransitioning.current = false;
-      }, 400);
+      }, 300);
     }
   };
 
@@ -160,15 +167,9 @@ export default function ReelsFeed({ onClose }) {
       isTransitioning.current = true;
       const newIndex = currentIndex - 1;
       setCurrentIndex(newIndex);
-      setIsVideoReady(false);
       
-      const currentVideo = videos[currentIndex];
-      if (currentVideo && videoRefs.current[currentVideo.id]) {
-        videoRefs.current[currentVideo.id]?.contentWindow?.postMessage(
-          '{"event":"command","func":"pauseVideo","args":""}',
-          '*'
-        );
-      }
+      // Pause all videos except the current one
+      pauseAllVideos(videos[newIndex]?.id);
       
       const container = containerRef.current;
       if (container) {
@@ -193,18 +194,22 @@ export default function ReelsFeed({ onClose }) {
               '{"event":"command","func":"playVideo","args":""}',
               '*'
             );
-            setIsVideoReady(true);
-          }, 200);
+          }, 100);
         }
         isTransitioning.current = false;
-      }, 400);
+      }, 300);
     }
   };
 
-  // Play first video automatically when loaded
+  // Play first video when loaded and pause others
   useEffect(() => {
     if (videos.length > 0) {
       const firstVideo = videos[0];
+      // Pause all videos initially
+      setTimeout(() => {
+        pauseAllVideos(null);
+      }, 100);
+      
       const firstIframe = videoRefs.current[firstVideo?.id];
       if (firstIframe) {
         setTimeout(() => {
@@ -217,8 +222,7 @@ export default function ReelsFeed({ onClose }) {
               '{"event":"command","func":"playVideo","args":""}',
               '*'
             );
-            setIsVideoReady(true);
-          }, 300);
+          }, 100);
         }, 600);
       }
     }
@@ -226,15 +230,8 @@ export default function ReelsFeed({ onClose }) {
 
   // Handle iframe load
   const handleIframeLoad = (videoId) => {
-    const iframe = videoRefs.current[videoId];
-    if (iframe) {
-      setTimeout(() => {
-        iframe.contentWindow?.postMessage(
-          '{"event":"command","func":"playVideo","args":""}',
-          '*'
-        );
-      }, 200);
-    }
+    // Pause all other videos when one loads
+    pauseAllVideos(videoId);
   };
 
   if (loading) {
@@ -263,13 +260,6 @@ export default function ReelsFeed({ onClose }) {
       <button className="reels-close-btn" onClick={onClose}>
         ✕
       </button>
-
-      {/* Loading overlay for first video */}
-      {!isVideoReady && currentIndex === 0 && (
-        <div className="reels-loading-overlay">
-          <div className="loading-spinner-small"></div>
-        </div>
-      )}
 
       <div className="reels-feed-container" ref={containerRef}>
         {videos.map((video) => (
@@ -379,22 +369,6 @@ export default function ReelsFeed({ onClose }) {
         .reels-close-btn:hover {
           background: rgba(255,255,255,0.2);
           transform: scale(1.05);
-        }
-
-        .reels-loading-overlay {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          z-index: 1001;
-        }
-        .loading-spinner-small {
-          width: 32px;
-          height: 32px;
-          border: 3px solid rgba(255,255,255,0.1);
-          border-top-color: #fff;
-          border-radius: 50%;
-          animation: spin 0.8s linear infinite;
         }
 
         .reels-feed-container {
