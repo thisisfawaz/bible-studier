@@ -52,7 +52,7 @@ function renderMessage(text) {
     }
 
     if (line.trim() === "") {
-      elements.push(<div key={i} style={{height: "4px"}}></div>);
+      elements.push(<div key={i} style={{ height: "4px" }}></div>);
       i++;
       continue;
     }
@@ -121,28 +121,31 @@ function renderInlineContent(text) {
 }
 
 export default function Home() {
-  const [darkMode, setDarkMode] = useState(true);
   const [activeTab, setActiveTab] = useState('devotions');
-  
+  const [darkMode, setDarkMode] = useState(true);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState(null);
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [speechRate, setSpeechRate] = useState(1);
+  const utteranceRef = useRef(null);
+
   const [chatSessions, setChatSessions] = useState([
-    { 
-      id: 1, 
-      title: "New Chat", 
-      date: "Just now", 
+    {
+      id: 1,
+      title: "New Chat",
+      date: "Just now",
       active: true,
-      messages: [
-        { text: "Hello! I'm your Bible study assistant. Ask me any question about scripture, and I'll help you understand it.", isUser: false }
-      ]
+      messages: []
     },
   ]);
-  
+
   const [currentSessionId, setCurrentSessionId] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [dailyDevotion, setDailyDevotion] = useState(null);
   const [isGenerating, setIsGenerating] = useState(true);
   const [error, setError] = useState(null);
   const chatEndRef = useRef(null);
-  
+
   const [selectedDevotionId, setSelectedDevotionId] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -150,12 +153,27 @@ export default function Home() {
   const messages = currentSession ? currentSession.messages : [];
 
   const updateMessages = (newMessages) => {
-    setChatSessions(prev => prev.map(session => 
-      session.id === currentSessionId 
+    setChatSessions(prev => prev.map(session =>
+      session.id === currentSessionId
         ? { ...session, messages: newMessages }
         : session
     ));
   };
+
+  // Load voices
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      const loadVoices = () => {
+        const voices = window.speechSynthesis.getVoices();
+        setAvailableVoices(voices);
+        if (voices.length > 0 && !selectedVoice) {
+          setSelectedVoice(voices[0]);
+        }
+      };
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+  }, []);
 
   useEffect(() => {
     async function loadDailyDevotion() {
@@ -221,11 +239,11 @@ export default function Home() {
       if (response.ok) {
         const finalMessages = [...updatedMessages, { text: data.reply, isUser: false }];
         updateMessages(finalMessages);
-        
-        if (messages.length === 1) {
+
+        if (messages.length === 0) {
           const newTitle = userMessage.slice(0, 30) + (userMessage.length > 30 ? '...' : '');
-          setChatSessions(prev => prev.map(session => 
-            session.id === currentSessionId 
+          setChatSessions(prev => prev.map(session =>
+            session.id === currentSessionId
               ? { ...session, title: newTitle }
               : session
           ));
@@ -249,9 +267,7 @@ export default function Home() {
       title: "New Chat",
       date: "Just now",
       active: true,
-      messages: [
-        { text: "Hello! I'm your Bible study assistant. Ask me any question about scripture, and I'll help you understand it.", isUser: false }
-      ]
+      messages: []
     };
     setChatSessions(prev => [
       ...prev.map(s => ({ ...s, active: false })),
@@ -275,307 +291,362 @@ export default function Home() {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  const themeClasses = darkMode ? 'dark' : 'light';
+  const handleDownloadPDF = async (devotion) => {
+    try {
+      const response = await fetch('/api/export-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ devotion })
+      });
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${devotion.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
+  };
+
+  // ============================================================
+  // SHARE FUNCTION
+  // ============================================================
+  const handleShare = async (devotion) => {
+    const url = window.location.href;
+    const text = `📖 ${devotion.title}\n\n${devotion.scripture}\n\nRead more at Bible Studier`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: devotion.title,
+          text: text,
+          url: url,
+        });
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Share failed:', err);
+        }
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(`${text}\n\n${url}`);
+        alert('Link copied to clipboard! Share it with your friends.');
+      } catch (err) {
+        console.error('Copy failed:', err);
+        alert('Failed to copy link. Please copy the URL manually.');
+      }
+    }
+  };
+
+  // ============================================================
+  // AUDIO FUNCTIONS
+  // ============================================================
+  const handleSpeak = (devotion) => {
+    if (!devotion) {
+      console.log('No devotion selected');
+      return;
+    }
+
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      alert('Speech synthesis is not supported in this browser.');
+      return;
+    }
+
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    const fullText = `${devotion.title}. ${devotion.scripture}. ${devotion.story}`;
+
+    // Force a short utterance first to "wake up" the speech engine
+    const wakeUtterance = new SpeechSynthesisUtterance(' ');
+    wakeUtterance.volume = 0;
+    wakeUtterance.onend = () => {
+      // Now speak the real text
+      const utterance = new SpeechSynthesisUtterance(fullText);
+      
+      // Get available voices
+      const voices = window.speechSynthesis.getVoices();
+      console.log('Available voices:', voices.map(v => v.name));
+      
+      // Try to find a working voice
+      const preferredVoices = ['Microsoft David Desktop', 'Microsoft Zira Desktop', 'Google UK English Female', 'Samantha'];
+      let selectedVoice = null;
+      
+      for (const voiceName of preferredVoices) {
+        const found = voices.find(v => v.name.includes(voiceName));
+        if (found) {
+          selectedVoice = found;
+          break;
+        }
+      }
+      
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        console.log('Using voice:', selectedVoice.name);
+      } else if (voices.length > 0) {
+        utterance.voice = voices[0];
+        console.log('Using default voice:', voices[0].name);
+      }
+      
+      utterance.rate = Math.min(speechRate, 1.2);
+      utterance.pitch = 1;
+      utterance.volume = 1;
+
+      utterance.onstart = () => {
+        console.log('Speech started');
+        setIsSpeaking(true);
+      };
+
+      utterance.onend = () => {
+        console.log('Speech ended');
+        setIsSpeaking(false);
+      };
+
+      utterance.onerror = (e) => {
+        console.log('Speech error:', e);
+        setIsSpeaking(false);
+      };
+
+      window.speechSynthesis.speak(utterance);
+    };
+
+    window.speechSynthesis.speak(wakeUtterance);
+  };
+
+  const handleStop = () => {
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  };
+
+  const handleVoiceChange = (e) => {
+    const voice = availableVoices.find(v => v.name === e.target.value);
+    setSelectedVoice(voice || null);
+  };
+
+  const handleRateChange = (e) => {
+    setSpeechRate(parseFloat(e.target.value));
+    // If currently speaking, update rate
+    if (window.speechSynthesis.speaking && utteranceRef.current) {
+      utteranceRef.current.rate = parseFloat(e.target.value);
+    }
+  };
 
   return (
-    <div className={`app-container ${themeClasses}`}>
+    <div className={`app ${darkMode ? '' : 'light'}`}>
       <style jsx>{`
         /* ============================================================
-           THEME VARIABLES — DeepSeek-style Dark Mode
+           DARK THEME (Default)
            ============================================================ */
-        .app-container {
-          --bg-primary: #0a0a0f;
-          --bg-secondary: #14141c;
-          --bg-tertiary: #1c1c26;
-          --bg-card: #181820;
-          --bg-input: #1c1c26;
-          --bg-hover: #22222e;
-          --bg-active: #2a2a38;
-          --bg-elevated: #20202a;
+        .app {
+          --bg-primary: #101012;
+          --bg-secondary: #0a0a0c;
+          --bg-card: #18181c;
+          --bg-hover: rgba(255,255,255,0.04);
+          --bg-active: rgba(255,255,255,0.06);
+          --text-primary: #f7f4ef;
+          --text-secondary: #a3a3a3;
+          --text-muted: #6a6a6a;
+          --border-color: rgba(255,255,255,0.06);
+          --border-light: rgba(255,255,255,0.1);
+          --accent-pink: #fd429c;
+          --accent-purple: #7f22fe;
+          --accent-gradient: linear-gradient(135deg, #fd429c, #7f22fe);
+          --shadow: rgba(0,0,0,0.5);
+          --radius: 12px;
+          --radius-full: 9999px;
+          --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           
-          --text-primary: #e8e8f0;
-          --text-secondary: #9a9ab0;
-          --text-muted: #6a6a80;
-          --text-inverse: #0a0a0f;
-          
-          --border-color: #2a2a38;
-          --border-light: #3a3a4a;
-          
-          --shadow-color: rgba(0, 0, 0, 0.5);
-          --shadow-glow: rgba(120, 120, 200, 0.06);
-          
-          --bubble-user: #2a2a3e;
-          --bubble-user-text: #e8e8f0;
-          --bubble-assistant: #1a1a26;
-          
-          --accent: #a78bfa;
-          --accent-hover: #c4b5fd;
-          --accent-dim: rgba(167, 139, 250, 0.08);
-          --accent-glow: rgba(167, 139, 250, 0.15);
-          
-          --scrollbar-track: #1a1a26;
-          --scrollbar-thumb: #3a3a4e;
-          
-          --header-bg: #0e0e16;
-          --code-bg: #1a1a26;
-          --prayer-bg: rgba(167, 139, 250, 0.06);
-          
-          --radius-sm: 8px;
-          --radius-md: 12px;
-          --radius-lg: 16px;
-          --radius-xl: 20px;
-          
-          --font: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-
-        /* Light theme — warm, clean, premium */
-        .app-container.light {
-          --bg-primary: #f5f5f7;
-          --bg-secondary: #ffffff;
-          --bg-tertiary: #f0f0f2;
-          --bg-card: #ffffff;
-          --bg-input: #f0f0f2;
-          --bg-hover: #e8e8ea;
-          --bg-active: #e0e0e4;
-          --bg-elevated: #f8f8fa;
-          
-          --text-primary: #1a1a24;
-          --text-secondary: #6a6a7e;
-          --text-muted: #9a9aae;
-          
-          --border-color: #e4e4e8;
-          --border-light: #d0d0d6;
-          
-          --shadow-color: rgba(0, 0, 0, 0.05);
-          --shadow-glow: rgba(120, 120, 200, 0.04);
-          
-          --bubble-user: #2a2a3e;
-          --bubble-user-text: #f5f5f7;
-          --bubble-assistant: #f0f0f2;
-          
-          --accent: #7c3aed;
-          --accent-hover: #6d28d9;
-          --accent-dim: rgba(124, 58, 237, 0.06);
-          --accent-glow: rgba(124, 58, 237, 0.08);
-          
-          --scrollbar-track: #e8e8ea;
-          --scrollbar-thumb: #c8c8d0;
-          
-          --header-bg: #ffffff;
-          --code-bg: #f0f0f2;
-          --prayer-bg: rgba(124, 58, 237, 0.04);
-        }
-
-        /* ============================================================
-           BASE
-           ============================================================ */
-        .app-container {
           min-height: 100vh;
-          display: flex;
-          flex-direction: column;
           background: var(--bg-primary);
           color: var(--text-primary);
           font-family: var(--font);
+          display: flex;
+          height: 100vh;
+          overflow: hidden;
           transition: background 0.3s ease, color 0.3s ease;
         }
 
         /* ============================================================
-           SCROLLBAR
+           LIGHT THEME
            ============================================================ */
-        ::-webkit-scrollbar {
-          width: 5px;
-          height: 5px;
-        }
-        ::-webkit-scrollbar-track {
-          background: var(--scrollbar-track);
-        }
-        ::-webkit-scrollbar-thumb {
-          background: var(--scrollbar-thumb);
-          border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: var(--text-muted);
+        .app.light {
+          --bg-primary: #f5f5f7;
+          --bg-secondary: #ffffff;
+          --bg-card: #ffffff;
+          --bg-hover: rgba(0,0,0,0.04);
+          --bg-active: rgba(0,0,0,0.06);
+          --text-primary: #1a1a24;
+          --text-secondary: #6a6a7e;
+          --text-muted: #9a9aae;
+          --border-color: rgba(0,0,0,0.08);
+          --border-light: rgba(0,0,0,0.15);
+          --accent-pink: #fd429c;
+          --accent-purple: #7f22fe;
+          --accent-gradient: linear-gradient(135deg, #fd429c, #7f22fe);
         }
 
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        .app.light ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
+        .app.light ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+
         /* ============================================================
-           HEADER
+           HAMBURGER MENU
            ============================================================ */
-        .app-header {
-          display: flex;
-          justify-content: space-between;
+        .hamburger-btn {
+          display: none;
+          flex-direction: column;
+          gap: 4px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 4px;
+          width: 28px;
+          height: 28px;
           align-items: center;
-          padding: 0.7rem 1.5rem;
-          background: var(--header-bg);
-          border-bottom: 1px solid var(--border-color);
-          flex-shrink: 0;
-          z-index: 10;
-          transition: background 0.3s ease;
+          justify-content: center;
         }
+        .hamburger-line {
+          width: 20px;
+          height: 2px;
+          background: var(--text-primary);
+          border-radius: 2px;
+          transition: all 0.25s ease;
+        }
+        .hamburger-btn.open .hamburger-line:nth-child(1) {
+          transform: rotate(45deg) translate(4px, 4px);
+        }
+        .hamburger-btn.open .hamburger-line:nth-child(2) {
+          opacity: 0;
+        }
+        .hamburger-btn.open .hamburger-line:nth-child(3) {
+          transform: rotate(-45deg) translate(4px, -4px);
+        }
+
         .header-left {
           display: flex;
           align-items: center;
-          gap: 1rem;
-        }
-        .header-right {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-        .sidebar-toggle {
-          background: none;
-          border: none;
-          font-size: 1.2rem;
-          cursor: pointer;
-          color: var(--text-secondary);
-          padding: 0.3rem 0.5rem;
-          border-radius: var(--radius-sm);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s;
-        }
-        .sidebar-toggle:hover {
-          background: var(--bg-hover);
-          color: var(--text-primary);
-        }
-        .app-header h1 {
-          font-size: 1.15rem;
-          font-weight: 600;
-          color: var(--text-primary);
-          letter-spacing: -0.02em;
-        }
-        .app-header h1 span {
-          color: var(--accent);
-        }
-        .header-badge {
-          font-size: 0.6rem;
-          font-weight: 500;
-          color: var(--text-muted);
-          background: var(--bg-tertiary);
-          padding: 0.2rem 0.7rem;
-          border-radius: 9999px;
-          border: 1px solid var(--border-color);
-          letter-spacing: 0.03em;
-          text-transform: uppercase;
-        }
-        @media (max-width: 480px) {
-          .header-badge { display: none; }
-          .app-header h1 { font-size: 1rem; }
-          .app-header { padding: 0.5rem 1rem; }
+          gap: 12px;
         }
 
         /* ============================================================
-           THEME TOGGLE — Minimal, clean
+           SIDEBAR OVERLAY (Mobile)
            ============================================================ */
-        .theme-btn {
-          display: flex;
-          align-items: center;
-          gap: 0.4rem;
-          padding: 0.4rem 0.8rem;
-          border-radius: var(--radius-sm);
-          border: 1px solid var(--border-color);
-          background: var(--bg-tertiary);
-          color: var(--text-secondary);
-          cursor: pointer;
-          font-size: 0.75rem;
-          font-weight: 500;
-          transition: all 0.2s ease;
-          white-space: nowrap;
-          font-family: var(--font);
+        .sidebar-overlay {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.5);
+          z-index: 99;
+          opacity: 0;
+          transition: opacity 0.3s ease;
         }
-        .theme-btn:hover {
-          background: var(--bg-hover);
-          color: var(--text-primary);
-          border-color: var(--border-light);
-        }
-        .theme-btn .icon { font-size: 0.9rem; }
-        .theme-btn .label { display: inline; }
-        @media (max-width: 640px) {
-          .theme-btn { padding: 0.35rem 0.6rem; }
-          .theme-btn .label { display: none; }
-          .theme-btn .icon { font-size: 1rem; }
+        .sidebar-overlay.open {
+          display: block;
+          opacity: 1;
         }
 
         /* ============================================================
-           MAIN LAYOUT
-           ============================================================ */
-        .main-layout {
-          display: flex;
-          flex: 1;
-          overflow: hidden;
-        }
-
-        /* ============================================================
-           SIDEBAR — DeepSeek style
+           SIDEBAR
            ============================================================ */
         .sidebar {
           width: 260px;
-          background: var(--bg-secondary);
+          min-width: 260px;
+          background: var(--bg-primary);
           border-right: 1px solid var(--border-color);
+          padding: 20px 12px;
           display: flex;
           flex-direction: column;
-          flex-shrink: 0;
-          overflow: hidden;
-          height: calc(100vh - 57px);
+          overflow-y: auto;
+          height: 100vh;
           position: sticky;
-          top: 57px;
-          transition: width 0.3s ease, opacity 0.2s ease, transform 0.3s ease;
+          top: 0;
+          transition: background 0.3s ease, border-color 0.3s ease;
         }
-        .sidebar.closed {
-          width: 0;
-          opacity: 0;
-          padding: 0;
-          border: none;
+
+        .sidebar-close {
+          display: none;
+          align-items: center;
+          justify-content: flex-end;
+          padding: 4px 8px 12px;
+          font-size: 20px;
+          cursor: pointer;
+          color: var(--text-secondary);
         }
-        .sidebar.open {
-          width: 260px;
-          opacity: 1;
+        .sidebar-close:hover {
+          color: var(--text-primary);
         }
+
+        .sidebar-logo {
+          padding: 4px 10px 16px;
+          font-size: 18px;
+          font-weight: 600;
+          letter-spacing: -0.02em;
+          background: var(--accent-gradient);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+
         .sidebar-header {
-          padding: 1rem 1rem 0.75rem;
+          padding: 0 4px 8px;
           border-bottom: 1px solid var(--border-color);
-          flex-shrink: 0;
+          margin-bottom: 8px;
         }
         .sidebar-title {
-          font-size: 0.75rem;
-          font-weight: 600;
-          color: var(--text-muted);
-          padding: 0.3rem 0.5rem;
+          font-size: 11px;
+          font-weight: 500;
           text-transform: uppercase;
-          letter-spacing: 0.05em;
+          letter-spacing: 0.06em;
+          color: var(--text-muted);
         }
         .new-chat-btn {
           width: 100%;
-          padding: 0.6rem;
-          background: var(--bg-tertiary);
-          color: var(--text-primary);
+          padding: 8px 12px;
+          border-radius: var(--radius-full);
           border: 1px solid var(--border-color);
-          border-radius: var(--radius-sm);
-          font-weight: 500;
-          font-size: 0.85rem;
+          background: transparent;
+          color: var(--text-secondary);
+          font-size: 13px;
+          font-weight: 450;
           cursor: pointer;
           transition: all 0.2s;
           font-family: var(--font);
+          margin-bottom: 4px;
         }
         .new-chat-btn:hover {
           background: var(--bg-hover);
+          color: var(--text-primary);
           border-color: var(--border-light);
         }
+
         .sidebar-sessions {
           flex: 1;
           overflow-y: auto;
-          padding: 0.5rem;
+          padding: 0 4px;
         }
         .session-item {
           display: flex;
           align-items: center;
-          gap: 0.6rem;
-          padding: 0.5rem 0.7rem;
-          border-radius: var(--radius-sm);
+          gap: 10px;
+          padding: 6px 10px;
+          border-radius: var(--radius-full);
           cursor: pointer;
           transition: all 0.15s;
-          margin-bottom: 0.1rem;
           color: var(--text-secondary);
+          font-size: 13px;
         }
         .session-item:hover {
           background: var(--bg-hover);
@@ -585,362 +656,536 @@ export default function Home() {
           background: var(--bg-active);
           color: var(--text-primary);
         }
-        .session-item .session-icon {
-          font-size: 0.8rem;
-          opacity: 0.6;
-          flex-shrink: 0;
-        }
-        .session-item.active .session-icon {
-          opacity: 1;
-        }
-        .session-info {
-          flex: 1;
-          min-width: 0;
-        }
-        .session-title {
-          font-size: 0.82rem;
-          font-weight: 450;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .session-item.active .session-title {
-          color: var(--text-primary);
-        }
-        .session-date {
-          font-size: 0.65rem;
-          color: var(--text-muted);
-        }
+        .session-item .icon { font-size: 14px; flex-shrink: 0; opacity: 0.5; }
+        .session-item.active .icon { opacity: 1; }
+        .session-info { flex: 1; min-width: 0; }
+        .session-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .session-date { font-size: 11px; color: var(--text-muted); }
+
         .sidebar-footer {
-          padding: 0.75rem 1rem;
           border-top: 1px solid var(--border-color);
-          flex-shrink: 0;
+          padding-top: 12px;
+          margin-top: 4px;
         }
+
+        .btn-upgrade {
+          display: block;
+          text-align: center;
+          padding: 8px 16px;
+          border-radius: var(--radius-full);
+          border: 1px solid var(--border-color);
+          background: transparent;
+          color: var(--text-primary);
+          font-size: 13px;
+          font-weight: 450;
+          cursor: pointer;
+          transition: all 0.2s;
+          margin-bottom: 8px;
+          width: 100%;
+          font-family: var(--font);
+        }
+        .btn-upgrade:hover {
+          background: var(--bg-hover);
+          border-color: var(--border-light);
+        }
+
         .sidebar-user {
           display: flex;
           align-items: center;
-          gap: 0.6rem;
+          gap: 10px;
+          padding: 8px 10px;
+          border-radius: var(--radius-full);
+          cursor: pointer;
+          transition: background 0.2s;
         }
-        .user-avatar {
-          width: 28px;
-          height: 28px;
+        .sidebar-user:hover { background: var(--bg-hover); }
+        .sidebar-user .avatar {
+          width: 30px;
+          height: 30px;
           border-radius: 50%;
-          background: var(--bg-tertiary);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 0.8rem;
-          color: var(--text-secondary);
-          border: 1px solid var(--border-color);
+          background: var(--accent-gradient);
+          flex-shrink: 0;
         }
-        .user-name {
-          font-size: 0.8rem;
-          font-weight: 450;
-          color: var(--text-secondary);
+        .sidebar-user .info { flex: 1; min-width: 0; }
+        .sidebar-user .info .name { font-size: 13px; font-weight: 500; line-height: 1.2; }
+        .sidebar-user .info .plan { font-size: 11px; color: var(--text-secondary); line-height: 1.2; }
+
+        /* ============================================================
+           DEVOTIONS SCROLL CONTAINER
+           ============================================================ */
+        .devotions-scroll {
+          flex: 1;
+          overflow-y: auto;
+          padding-right: 4px;
+          min-height: 0;
         }
 
-        @media (max-width: 768px) {
-          .sidebar {
-            position: fixed;
-            top: 57px;
-            left: 0;
-            height: calc(100vh - 57px);
-            z-index: 20;
-            transform: translateX(-100%);
-            width: 280px !important;
-            box-shadow: 0 8px 32px var(--shadow-color);
-            border-right: none;
-            background: var(--bg-secondary);
-          }
-          .sidebar.open { transform: translateX(0); }
-          .sidebar.closed { transform: translateX(-100%); width: 280px !important; opacity: 1; }
+        .devotions-scroll::-webkit-scrollbar {
+          width: 4px;
+        }
+
+        .devotions-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .devotions-scroll::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 9999px;
+        }
+
+        .app.light .devotions-scroll::-webkit-scrollbar-thumb {
+          background: rgba(0, 0, 0, 0.15);
         }
 
         /* ============================================================
            MAIN CONTENT
            ============================================================ */
-        .main-content {
+        .main {
           flex: 1;
-          padding: 1.5rem 2rem;
-          overflow-y: auto;
-          height: calc(100vh - 57px);
-          background: var(--bg-primary);
+          padding: 24px 32px 0;
+          width: 100%;
           transition: background 0.3s ease;
-        }
-        @media (max-width: 768px) { .main-content { padding: 1rem; } }
-        @media (max-width: 480px) { .main-content { padding: 0.75rem; } }
-
-        /* ============================================================
-           TABS — Clean, minimal
-           ============================================================ */
-        .tabs {
           display: flex;
-          gap: 0.25rem;
-          margin-bottom: 1.5rem;
-          background: var(--bg-secondary);
-          padding: 0.25rem;
-          border-radius: var(--radius-md);
+          flex-direction: column;
+          overflow-y: auto;
+          height: 98vh;
+        }
+
+        .main-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 24px;
+        }
+        .main-header .title {
+          font-size: 22px;
+          font-weight: 500;
+          letter-spacing: -0.02em;
+        }
+        .main-header .title span {
+          background: var(--accent-gradient);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .header-actions .theme-btn {
+          padding: 6px 14px;
+          border-radius: var(--radius-full);
           border: 1px solid var(--border-color);
-          transition: background 0.3s ease;
+          background: transparent;
+          color: var(--text-secondary);
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 450;
+          transition: all 0.2s;
+          font-family: var(--font);
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .header-actions .theme-btn:hover {
+          background: var(--bg-hover);
+          color: var(--text-primary);
+          border-color: var(--border-light);
+        }
+        .header-actions .theme-btn .icon { font-size: 14px; }
+
+        .tabs {
+          flex-shrink: 0;
+          display: flex;
+          gap: 4px;
+          background: var(--bg-secondary);
+          padding: 4px;
+          border-radius: var(--radius);
+          border: 1px solid var(--border-color);
+          margin-bottom: 24px;
+          transition: background 0.3s ease, border-color 0.3s ease;
         }
         .tab-btn {
           flex: 1;
-          padding: 0.5rem 1rem;
+          padding: 8px 16px;
           border: none;
-          border-radius: var(--radius-sm);
-          font-size: 0.8rem;
-          font-weight: 500;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 450;
           cursor: pointer;
-          transition: all 0.2s ease;
+          transition: all 0.2s;
           background: transparent;
           color: var(--text-secondary);
+          font-family: var(--font);
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 0.4rem;
-          font-family: var(--font);
+          gap: 8px;
         }
-        .tab-btn:hover { color: var(--text-primary); }
-        .tab-btn.active {
-          background: var(--bg-active);
+        .tab-btn:hover { 
           color: var(--text-primary);
-          box-shadow: none;
+          background: rgba(124, 58, 237, 0.06);
         }
-        .tab-btn .icon { font-size: 0.9rem; }
-        @media (max-width: 480px) {
-          .tab-btn { font-size: 0.7rem; padding: 0.4rem 0.5rem; }
+        .tab-btn.active {
+          background: #7c3aed;
+          color: #ffffff;
+          box-shadow: 0 2px 12px rgba(124, 58, 237, 0.3);
+        }
+        .tab-btn.active:hover {
+          background: #6d28d9;
+        }
+        .tab-btn .icon { 
+          font-size: 16px; 
+          font-weight: 400; 
+          opacity: 0.6;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .tab-btn .tab-icon svg {
+          width: 18px;
+          height: 18px;
+          stroke: currentColor;
+        }
+        .tab-btn.active .icon { 
+          opacity: 1; 
+        }
+        .tab-btn.active .tab-icon svg {
+          stroke: #ffffff;
         }
 
         /* ============================================================
-           DEVOTION CARD — Clean, minimal, no blue
+           DEVOTION CARD
            ============================================================ */
         .devotion-card {
           background: var(--bg-card);
-          border-radius: var(--radius-md);
-          padding: 1.5rem;
-          margin-bottom: 1.25rem;
+          border-radius: var(--radius);
+          padding: 24px;
+          margin-bottom: 16px;
           border: 1px solid var(--border-color);
-          transition: all 0.25s ease;
+          transition: all 0.25s;
         }
         .devotion-card:hover {
           border-color: var(--border-light);
+          background: rgba(255,255,255,0.02);
+        }
+        .app.light .devotion-card:hover {
+          background: rgba(0,0,0,0.01);
         }
         .card-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 0.6rem;
+          margin-bottom: 8px;
           flex-wrap: wrap;
-          gap: 0.4rem;
+          gap: 6px;
         }
         .card-category {
-          font-size: 0.65rem;
+          font-size: 11px;
           font-weight: 500;
-          background: var(--bg-tertiary);
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          padding: 3px 10px;
+          border-radius: var(--radius-full);
+          background: rgba(255,255,255,0.04);
           color: var(--text-secondary);
-          padding: 0.2rem 0.7rem;
-          border-radius: 9999px;
           border: 1px solid var(--border-color);
-          letter-spacing: 0.02em;
+        }
+        .app.light .card-category {
+          background: rgba(0,0,0,0.04);
         }
         .card-category.today {
-          background: var(--accent-dim);
-          color: var(--accent);
-          border-color: rgba(167, 139, 250, 0.15);
+          background: rgba(253, 66, 156, 0.12);
+          color: var(--accent-pink);
+          border-color: rgba(253, 66, 156, 0.2);
         }
         .card-date {
-          font-size: 0.7rem;
+          font-size: 12px;
           color: var(--text-muted);
         }
         .card-title {
-          font-size: 1.4rem;
-          font-weight: 600;
+          font-size: 22px;
+          font-weight: 500;
           color: var(--text-primary);
-          margin-bottom: 0.4rem;
+          margin-bottom: 6px;
           letter-spacing: -0.01em;
         }
         .card-scripture {
-          background: var(--bg-tertiary);
-          border-left: 3px solid var(--accent);
-          padding: 0.5rem 1rem;
-          margin-bottom: 0.8rem;
-          border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-          font-size: 0.85rem;
+          background: rgba(255,255,255,0.03);
+          border-left: 3px solid var(--accent-pink);
+          padding: 8px 14px;
+          margin-bottom: 12px;
+          border-radius: 0 6px 6px 0;
+          font-size: 14px;
           color: var(--text-secondary);
           font-style: italic;
         }
+        .app.light .card-scripture {
+          background: rgba(0,0,0,0.02);
+        }
         .card-story {
           color: var(--text-secondary);
-          font-size: 0.88rem;
+          font-size: 15px;
           line-height: 1.7;
-          margin-bottom: 1rem;
+          margin-bottom: 12px;
         }
         .prayer-section {
-          background: var(--prayer-bg);
-          border-left: 3px solid var(--accent);
-          padding: 1rem 1.2rem;
-          border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-          margin-top: 0.75rem;
+          background: rgba(255,255,255,0.02);
+          border-left: 3px solid var(--accent-purple);
+          padding: 12px 16px;
+          border-radius: 0 6px 6px 0;
+          margin-top: 4px;
+        }
+        .app.light .prayer-section {
+          background: rgba(0,0,0,0.02);
         }
         .prayer-title {
-          font-size: 0.8rem;
+          font-size: 13px;
           font-weight: 500;
-          color: var(--accent);
-          margin-bottom: 0.3rem;
+          color: var(--accent-purple);
+          margin-bottom: 4px;
           letter-spacing: 0.02em;
         }
         .prayer-text {
           color: var(--text-secondary);
-          font-size: 0.88rem;
+          font-size: 14px;
           line-height: 1.7;
           font-style: italic;
         }
-        @media (max-width: 480px) {
-          .devotion-card { padding: 1rem; }
-          .card-title { font-size: 1.1rem; }
+
+        /* ============================================================
+           ACTION BUTTONS ROW
+           ============================================================ */
+        .action-buttons {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 14px;
+          align-items: center;
+        }
+
+        .action-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 14px;
+          border-radius: var(--radius-full);
+          border: 1px solid var(--border-color);
+          background: transparent;
+          color: var(--text-secondary);
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 450;
+          transition: all 0.2s;
+          font-family: var(--font);
+        }
+        .action-btn:hover {
+          background: var(--bg-hover);
+          color: var(--text-primary);
+          border-color: var(--border-light);
+        }
+        .action-btn .btn-icon {
+          width: 18px;
+          height: 18px;
+          stroke: currentColor;
+          stroke-width: 1.5;
+          fill: none;
+          flex-shrink: 0;
+        }
+        .action-btn.active {
+          background: rgba(124, 58, 237, 0.15);
+          color: var(--accent-purple);
+          border-color: rgba(124, 58, 237, 0.2);
+        }
+        .action-btn.active:hover {
+          background: rgba(124, 58, 237, 0.2);
+        }
+
+        /* Voice controls */
+        .voice-controls {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          align-items: center;
+          margin-top: 8px;
+          padding: 8px 12px;
+          border-radius: var(--radius-sm);
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border-color);
+        }
+        .voice-controls select,
+        .voice-controls input[type="range"] {
+          background: var(--bg-secondary);
+          color: var(--text-primary);
+          border: 1px solid var(--border-color);
+          border-radius: 6px;
+          padding: 4px 8px;
+          font-size: 12px;
+          font-family: var(--font);
+          outline: none;
+        }
+        .voice-controls select:focus,
+        .voice-controls input:focus {
+          border-color: var(--accent-purple);
+        }
+        .voice-controls label {
+          font-size: 12px;
+          color: var(--text-muted);
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .voice-controls input[type="range"] {
+          width: 80px;
+          accent-color: var(--accent-purple);
+        }
+
+        .download-btn {
+          margin-top: 12px;
+          padding: 8px 16px;
+          border-radius: 9999px;
+          border: 1px solid var(--border-color);
+          background: transparent;
+          color: var(--text-secondary);
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 450;
+          transition: all 0.2s;
+          font-family: var(--font);
+        }
+        .download-btn:hover {
+          background: var(--bg-hover);
+          color: var(--text-primary);
+          border-color: var(--border-light);
         }
 
         /* ============================================================
-           CHAT — Minimal, clean, like DeepSeek
+           CHAT — Welcome Screen + Messages
            ============================================================ */
         .chat-container {
           background: var(--bg-card);
-          border-radius: var(--radius-md);
+          border-radius: var(--radius);
           border: 1px solid var(--border-color);
           overflow: hidden;
           display: flex;
           flex-direction: column;
-          height: calc(100vh - 57px - 3rem - 55px);
-          transition: background 0.3s ease;
-        }
-        @media (max-width: 768px) {
-          .chat-container { height: calc(100vh - 57px - 2rem - 50px); }
+          flex: 1;
+          height: calc(100vh - 180px);
+          min-height: 0;
+          transition: background 0.3s ease, border-color 0.3s ease;
         }
         .chat-messages {
           flex: 1;
           overflow-y: auto;
-          padding: 1.25rem 1.5rem;
+          padding: 20px 24px;
           background: var(--bg-primary);
           transition: background 0.3s ease;
+          display: flex;
+          flex-direction: column;
         }
-        @media (max-width: 480px) { .chat-messages { padding: 0.75rem 1rem; } }
 
+        /* Welcome Screen */
+        .welcome-screen {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          padding: 40px 20px;
+        }
+        .welcome-screen .welcome-icon {
+          font-size: 64px;
+          margin-bottom: 16px;
+        }
+        .welcome-screen .welcome-title {
+          font-size: 28px;
+          font-weight: 500;
+          color: var(--text-primary);
+          margin-bottom: 8px;
+          letter-spacing: -0.02em;
+        }
+        .welcome-screen .welcome-subtitle {
+          font-size: 16px;
+          color: var(--text-secondary);
+          max-width: 480px;
+          line-height: 1.6;
+        }
+        .welcome-screen .welcome-subtitle span {
+          color: var(--accent-pink);
+        }
+
+        /* Chat Message */
         .chat-message {
           display: flex;
-          margin-bottom: 1rem;
+          margin-bottom: 12px;
           animation: fadeIn 0.25s ease;
         }
         .chat-message.user { justify-content: flex-end; }
         .chat-message .bubble {
-          max-width: 80%;
-          padding: 0.6rem 1rem;
-          border-radius: var(--radius-md);
-          font-size: 0.88rem;
+          max-width: 78%;
+          padding: 10px 16px;
+          border-radius: var(--radius);
+          font-size: 15px;
           line-height: 1.6;
           word-wrap: break-word;
         }
         .chat-message.user .bubble {
-          background: var(--bubble-user);
-          color: var(--bubble-user-text);
+          background: var(--accent-gradient);
+          color: #fff;
           border-bottom-right-radius: 4px;
         }
         .chat-message.assistant .bubble {
-          background: var(--bubble-assistant);
+          background: var(--bg-secondary);
           color: var(--text-primary);
           border-bottom-left-radius: 4px;
           border: 1px solid var(--border-color);
         }
         .chat-message .bubble .timestamp {
-          font-size: 0.6rem;
-          opacity: 0.4;
-          margin-top: 0.2rem;
+          font-size: 11px;
+          opacity: 0.35;
+          margin-top: 4px;
           display: block;
         }
         .chat-message.user .bubble .timestamp { text-align: right; }
-        @media (max-width: 480px) {
-          .chat-message .bubble { max-width: 92%; font-size: 0.82rem; padding: 0.5rem 0.8rem; }
-        }
-
-        /* ============================================================
-           CHAT INPUT
-           ============================================================ */
-        .chat-input {
-          display: flex;
-          gap: 0.6rem;
-          padding: 0.75rem 1.25rem;
-          border-top: 1px solid var(--border-color);
-          background: var(--bg-card);
-          flex-shrink: 0;
-          transition: background 0.3s ease;
-        }
-        @media (max-width: 480px) {
-          .chat-input { padding: 0.6rem 0.8rem; gap: 0.4rem; }
-        }
-        .chat-input input {
-          flex: 1;
-          padding: 0.6rem 1rem;
-          border: 1px solid var(--border-color);
-          border-radius: var(--radius-sm);
-          outline: none;
-          font-size: 0.85rem;
-          transition: all 0.2s;
-          background: var(--bg-input);
-          color: var(--text-primary);
-          font-family: var(--font);
-        }
-        .chat-input input:focus {
-          border-color: var(--accent);
-          box-shadow: 0 0 0 3px var(--accent-glow);
-        }
-        .chat-input input::placeholder { color: var(--text-muted); }
-        .chat-input button {
-          padding: 0.6rem 1.4rem;
-          background: var(--bg-tertiary);
-          color: var(--text-secondary);
-          border: 1px solid var(--border-color);
-          border-radius: var(--radius-sm);
+        .chat-message .bubble .sender {
+          font-size: 11px;
           font-weight: 500;
-          font-size: 0.8rem;
-          cursor: pointer;
-          transition: all 0.2s;
-          white-space: nowrap;
-          font-family: var(--font);
-        }
-        .chat-input button:hover:not(:disabled) {
-          background: var(--bg-hover);
-          color: var(--text-primary);
-          border-color: var(--border-light);
-        }
-        .chat-input button:disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
-        }
-        @media (max-width: 480px) {
-          .chat-input button { padding: 0.5rem 1rem; font-size: 0.75rem; }
-          .chat-input input { padding: 0.5rem 0.8rem; font-size: 0.8rem; }
+          color: var(--accent-purple);
+          margin-bottom: 2px;
+          display: block;
         }
 
-        /* ============================================================
-           TYPING INDICATOR
-           ============================================================ */
-        .typing-indicator {
+        /* "Paul is typing..." */
+        .typing-indicator-wrapper {
           display: flex;
-          gap: 0.35rem;
-          padding: 0.2rem 0;
+          align-items: center;
+          gap: 10px;
+          padding: 6px 0 12px;
         }
-        .typing-indicator span {
-          width: 7px;
-          height: 7px;
+        .typing-indicator-wrapper .typing-label {
+          font-size: 13px;
+          color: var(--text-muted);
+          font-weight: 450;
+        }
+        .typing-dots {
+          display: flex;
+          gap: 4px;
+        }
+        .typing-dots span {
+          width: 8px;
+          height: 8px;
           border-radius: 50%;
           background: var(--text-muted);
           animation: bounce 1.4s infinite ease-in-out both;
         }
-        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
-        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
-        .typing-indicator span:nth-child(3) { animation-delay: 0s; }
+        .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0s; }
 
         @keyframes bounce {
-          0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+          0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
           40% { transform: scale(1); opacity: 1; }
         }
         @keyframes fadeIn {
@@ -948,242 +1193,490 @@ export default function Home() {
           to { opacity: 1; transform: translateY(0); }
         }
 
-        /* ============================================================
-           MESSAGE RENDER STYLES
-           ============================================================ */
-        .msg-paragraph { margin: 3px 0; line-height: 1.6; }
-        .msg-h2 {
-          font-size: 1.1rem;
-          font-weight: 600;
-          margin: 6px 0 3px;
-          color: var(--text-primary);
+        .chat-input {
+          flex-shrink: 0;
+          display: flex;
+          gap: 8px;
+          padding: 12px 20px;
+          border-top: 1px solid var(--border-color);
+          background: var(--bg-card);
+          transition: background 0.3s ease, border-color 0.3s ease;
         }
-        .msg-h3 {
-          font-size: 0.95rem;
-          font-weight: 500;
-          margin: 4px 0 2px;
+        .chat-input input {
+          flex: 1;
+          padding: 8px 14px;
+          border: 1px solid var(--border-color);
+          border-radius: var(--radius-full);
+          outline: none;
+          font-size: 14px;
+          background: var(--bg-secondary);
           color: var(--text-primary);
+          font-family: var(--font);
+          transition: all 0.2s;
         }
-        .msg-list-item {
-          margin: 2px 0;
-          padding-left: 4px;
+        .chat-input input:focus {
+          border-color: var(--accent-pink);
+          box-shadow: 0 0 0 3px rgba(253, 66, 156, 0.1);
+        }
+        .chat-input input::placeholder { color: var(--text-muted); }
+        .chat-input button {
+          padding: 8px 20px;
+          border-radius: var(--radius-full);
+          border: 1px solid var(--border-color);
+          background: transparent;
           color: var(--text-secondary);
+          font-size: 14px;
+          font-weight: 450;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-family: var(--font);
         }
+        .chat-input button:hover:not(:disabled) {
+          background: var(--bg-hover);
+          color: var(--text-primary);
+          border-color: var(--border-light);
+        }
+        .chat-input button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .msg-paragraph { margin: 4px 0; line-height: 1.6; }
+        .msg-h2 { font-size: 18px; font-weight: 500; margin: 8px 0 4px; color: var(--text-primary); }
+        .msg-h3 { font-size: 15px; font-weight: 500; margin: 6px 0 3px; color: var(--text-primary); }
+        .msg-list-item { margin: 2px 0; padding-left: 4px; color: var(--text-secondary); }
         .code-block {
-          background: var(--code-bg);
-          border-radius: var(--radius-sm);
-          padding: 6px 10px;
+          background: var(--bg-secondary);
+          border-radius: 6px;
+          padding: 8px 12px;
           overflow: auto;
-          font-size: 0.75rem;
+          font-size: 13px;
           font-family: monospace;
           margin: 4px 0;
           color: var(--text-primary);
           border: 1px solid var(--border-color);
         }
 
-        /* ============================================================
-           LOADING & ERROR
-           ============================================================ */
-        .loading {
-          text-align: center;
-          padding: 2rem 0;
-          color: var(--text-muted);
-          font-size: 0.9rem;
-        }
+        .loading { text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 15px; }
         .error {
           background: rgba(239, 68, 68, 0.06);
           border-left: 3px solid #ef4444;
-          padding: 0.8rem 1.2rem;
-          border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+          padding: 12px 16px;
+          border-radius: 0 6px 6px 0;
           color: #ef4444;
-          font-size: 0.85rem;
+          font-size: 14px;
+        }
+
+        /* ============================================================
+           MOBILE RESPONSIVE
+           ============================================================ */
+        @media (max-width: 768px) {
+          .hamburger-btn { display: flex; }
+          
+          .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            transform: translateX(-100%);
+            width: 280px !important;
+            z-index: 100;
+            background: var(--bg-primary);
+            border-right: 1px solid var(--border-color);
+            transition: transform 0.3s ease;
+            overflow-y: auto;
+            padding: 16px 12px;
+          }
+          .sidebar.open { transform: translateX(0); }
+          .sidebar.closed { transform: translateX(-100%); }
+          
+          .sidebar-close { display: flex; }
+          .sidebar-overlay.open { display: block; opacity: 1; }
+          
+          .main { 
+            padding: 16px 16px 0; 
+            height: 98vh; 
+            overflow: hidden; 
+          }
+          .main-header .title { font-size: 18px; }
+          
+          .tabs {
+            flex-shrink: 0;
+          }
+          
+          .devotion-card { padding: 14px; }
+          .card-title { font-size: 17px; }
+          
+          .chat-container { 
+            flex: 1;
+            min-height: 0;
+            height: 100%;
+          }
+          .chat-messages { padding: 12px; }
+          .chat-input { 
+            padding: 8px 12px;
+            flex-shrink: 0;
+          }
+          .chat-message .bubble { max-width: 90%; font-size: 14px; }
+          .welcome-screen .welcome-title { font-size: 22px; }
+          .welcome-screen .welcome-icon { font-size: 48px; }
+
+          .action-buttons {
+            gap: 6px;
+          }
+          .action-btn {
+            font-size: 12px;
+            padding: 5px 10px;
+          }
+          .action-btn .btn-icon {
+            width: 16px;
+            height: 16px;
+          }
+          .voice-controls {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .voice-controls select,
+          .voice-controls input[type="range"] {
+            width: 100%;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .main { 
+            padding: 12px 12px 0; 
+            height: 98vh; 
+            overflow: hidden; 
+          }
+          .main-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+          .header-actions { width: 100%; justify-content: flex-start; }
+          
+          .tabs { flex-direction: column; }
+          .tab-btn { padding: 10px; }
+          
+          .devotion-card { padding: 12px; }
+          .card-title { font-size: 16px; }
+          .card-scripture { font-size: 13px; }
+          .card-story { font-size: 14px; }
+          
+          .chat-container { 
+            flex: 1;
+            min-height: 0;
+            height: 100%;
+          }
+          .chat-messages { padding: 10px; }
+          .chat-input { 
+            padding: 6px 10px;
+            flex-shrink: 0;
+          }
+          .chat-message .bubble { max-width: 92%; font-size: 13px; }
+          .welcome-screen .welcome-title { font-size: 20px; }
+          .welcome-screen .welcome-subtitle { font-size: 14px; }
         }
       `}</style>
 
-      {/* ===== HEADER ===== */}
-      <header className="app-header">
-        <div className="header-left">
-          <button className="sidebar-toggle" onClick={toggleSidebar} aria-label="Toggle sidebar">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
-            </svg>
-          </button>
-          <h1>Bible<span>Studier</span></h1>
+      {/* ===== SIDEBAR OVERLAY ===== */}
+      <div className={`sidebar-overlay ${isSidebarOpen ? 'open' : ''}`} onClick={toggleSidebar}></div>
+
+      {/* ===== SIDEBAR ===== */}
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
+        <div className="sidebar-close" onClick={toggleSidebar}>✕</div>
+        <div className="sidebar-logo">✦ Bible Studier</div>
+
+        <div className="sidebar-header">
+          {activeTab === 'chat' ? (
+            <button className="new-chat-btn" onClick={startNewChat}>+ New Chat</button>
+          ) : (
+            <div className="sidebar-title">📖 Devotionals</div>
+          )}
         </div>
-        <div className="header-right">
-          <span className="header-badge">✦ Daily</span>
-          <button className="theme-btn" onClick={toggleTheme}>
-            <span className="icon">{darkMode ? '☀️' : '🌙'}</span>
-            <span className="label">{darkMode ? 'Light' : 'Dark'}</span>
-          </button>
-        </div>
-      </header>
 
-      {/* ===== MAIN LAYOUT ===== */}
-      <div className="main-layout">
-
-        {/* ===== SIDEBAR ===== */}
-        <aside className={`sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
-          <div className="sidebar-header">
-            {activeTab === 'chat' ? (
-              <button className="new-chat-btn" onClick={startNewChat}>+ New Chat</button>
-            ) : (
-              <div className="sidebar-title">📖 Devotionals</div>
-            )}
-          </div>
-
-          <div className="sidebar-sessions">
-            {activeTab === 'chat' ? (
-              chatSessions.map((session) => (
+        <div className="sidebar-sessions">
+          {activeTab === 'chat' ? (
+            chatSessions.map((session) => (
+              <div
+                key={session.id}
+                className={`session-item ${session.active ? 'active' : ''}`}
+                onClick={() => switchChat(session.id)}
+              >
+                <span className="icon">💬</span>
+                <div className="session-info">
+                  <div className="session-title">{session.title}</div>
+                  <div className="session-date">{session.date}</div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <>
+              {dailyDevotion && (
                 <div
-                  key={session.id}
-                  className={`session-item ${session.active ? 'active' : ''}`}
-                  onClick={() => switchChat(session.id)}
+                  className={`session-item ${selectedDevotionId === 'daily' ? 'active' : ''}`}
+                  onClick={() => setSelectedDevotionId('daily')}
                 >
-                  <span className="session-icon">💬</span>
+                  <span className="icon">⭐</span>
                   <div className="session-info">
-                    <div className="session-title">{session.title}</div>
-                    <div className="session-date">{session.date}</div>
+                    <div className="session-title">Today's Devotion</div>
+                    <div className="session-date">{dailyDevotion.date || new Date().toLocaleDateString()}</div>
                   </div>
                 </div>
-              ))
-            ) : (
-              <>
-                {dailyDevotion && (
-                  <div
-                    className={`session-item ${selectedDevotionId === 'daily' ? 'active' : ''}`}
-                    onClick={() => setSelectedDevotionId('daily')}
-                  >
-                    <span className="session-icon">⭐</span>
-                    <div className="session-info">
-                      <div className="session-title">Today's Devotion</div>
-                      <div className="session-date">{dailyDevotion.date || new Date().toLocaleDateString()}</div>
-                    </div>
+              )}
+              {devotions.map((devotion) => (
+                <div
+                  key={devotion.id}
+                  className={`session-item ${selectedDevotionId === devotion.id ? 'active' : ''}`}
+                  onClick={() => setSelectedDevotionId(devotion.id)}
+                >
+                  <span className="icon">📖</span>
+                  <div className="session-info">
+                    <div className="session-title">{devotion.title}</div>
+                    <div className="session-date">{devotion.category} • {devotion.date || ''}</div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+
+        <div className="sidebar-footer">
+          <button className="btn-upgrade" onClick={toggleTheme}>
+            {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
+          </button>
+          <div className="sidebar-user">
+            <div className="avatar"></div>
+            <div className="info">
+              <div className="name">Bible Studier</div>
+              <div className="plan">Free Plan</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* ===== MAIN CONTENT ===== */}
+      <main className="main">
+        <div className="main-header">
+          <div className="header-left">
+            <button className={`hamburger-btn ${isSidebarOpen ? 'open' : ''}`} onClick={toggleSidebar}>
+              <span className="hamburger-line"></span>
+              <span className="hamburger-line"></span>
+              <span className="hamburger-line"></span>
+            </button>
+            <div className="title">Bible <span>Studier</span></div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="tabs">
+          <button
+            onClick={() => {
+              setActiveTab('devotions');
+              if (!selectedDevotionId) setSelectedDevotionId('daily');
+            }}
+            className={`tab-btn ${activeTab === 'devotions' ? 'active' : ''}`}
+          >
+            <span className="icon tab-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 6h16v14H4z" />
+                <path d="M4 6V4h16v2" />
+                <path d="M8 10h8" />
+                <path d="M8 14h6" />
+                <path d="M8 18h4" />
+                <path d="M12 6v14" />
+              </svg>
+            </span>
+            Devotionals
+          </button>
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
+          >
+            <span className="icon tab-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </span>
+            Paul
+          </button>
+        </div>
+
+        {/* Devotionals */}
+        {activeTab === 'devotions' && (
+          <div className="devotions-scroll">
+            {isGenerating ? (
+              <div className="loading">Loading today's devotion...</div>
+            ) : error ? (
+              <div className="error">⚠️ {error}</div>
+            ) : selectedDevotion ? (
+              <div className="devotion-card">
+                <div className="card-header">
+                  <span className={`card-category ${selectedDevotionId === 'daily' ? 'today' : ''}`}>
+                    {selectedDevotionId === 'daily' ? '🌟 Today\'s Devotion' : (selectedDevotion.category || 'Faith')}
+                  </span>
+                  <span className="card-date">📅 {selectedDevotion.date || ''}</span>
+                </div>
+                <h2 className="card-title">{selectedDevotion.title}</h2>
+                <div className="card-scripture">{selectedDevotion.scripture}</div>
+                <p className="card-story">{selectedDevotion.story}</p>
+                {selectedDevotion.prayer && (
+                  <div className="prayer-section">
+                    <div className="prayer-title">🙏 Prayer</div>
+                    <div className="prayer-text">{selectedDevotion.prayer}</div>
                   </div>
                 )}
-                {devotions.map((devotion) => (
-                  <div
-                    key={devotion.id}
-                    className={`session-item ${selectedDevotionId === devotion.id ? 'active' : ''}`}
-                    onClick={() => setSelectedDevotionId(devotion.id)}
+
+                {/* ============================================================
+                    ACTION BUTTONS — Download PDF, Share, Audio
+                    ============================================================ */}
+                <div className="action-buttons">
+                  {/* Download PDF */}
+                  <button
+                    onClick={() => handleDownloadPDF(selectedDevotion)}
+                    className="action-btn"
                   >
-                    <span className="session-icon">📖</span>
-                    <div className="session-info">
-                      <div className="session-title">{devotion.title}</div>
-                      <div className="session-date">{devotion.category} • {devotion.date || ''}</div>
-                    </div>
+                    <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="12" y1="18" x2="12" y2="12" />
+                      <polyline points="9 15 12 18 15 15" />
+                    </svg>
+                    PDF
+                  </button>
+
+                  {/* Share */}
+                  <button
+                    onClick={() => handleShare(selectedDevotion)}
+                    className="action-btn"
+                  >
+                    <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                      <polyline points="16 6 12 2 8 6" />
+                      <line x1="12" y1="2" x2="12" y2="15" />
+                    </svg>
+                    Share
+                  </button>
+
+                  {/* Audio — Play/Stop */}
+                  <button
+                    onClick={() => {
+                      if (isSpeaking) {
+                        handleStop();
+                      } else {
+                        handleSpeak(selectedDevotion);
+                      }
+                    }}
+                    className={`action-btn ${isSpeaking ? 'active' : ''}`}
+                  >
+                    {isSpeaking ? (
+                      <>
+                        <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="6" y="4" width="4" height="16" />
+                          <rect x="14" y="4" width="4" height="16" />
+                        </svg>
+                        Stop
+                      </>
+                    ) : (
+                      <>
+                        <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                        Listen
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Voice Controls — only show when audio is active */}
+                {isSpeaking && (
+                  <div className="voice-controls">
+                    <label>
+                      Voice:
+                      <select value={selectedVoice?.name || ''} onChange={handleVoiceChange}>
+                        {availableVoices.map((voice) => (
+                          <option key={voice.name} value={voice.name}>
+                            {voice.name} ({voice.lang})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Speed:
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="2"
+                        step="0.1"
+                        value={speechRate}
+                        onChange={handleRateChange}
+                      />
+                      <span style={{ minWidth: '30px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                        {speechRate}x
+                      </span>
+                    </label>
                   </div>
-                ))}
-              </>
+                )}
+              </div>
+            ) : (
+              <div className="loading">No devotion selected.</div>
             )}
           </div>
+        )}
 
-          <div className="sidebar-footer">
-            <div className="sidebar-user">
-              <span className="user-avatar">👤</span>
-              <span className="user-name">Bible Studier</span>
-            </div>
-          </div>
-        </aside>
-
-        {/* ===== MAIN CONTENT ===== */}
-        <main className="main-content">
-
-          <div className="tabs">
-            <button
-              onClick={() => {
-                setActiveTab('devotions');
-                if (!selectedDevotionId) setSelectedDevotionId('daily');
-              }}
-              className={`tab-btn ${activeTab === 'devotions' ? 'active' : ''}`}
-            >
-              <span className="icon">📖</span> Devotionals
-            </button>
-            <button
-              onClick={() => setActiveTab('chat')}
-              className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
-            >
-              <span className="icon">🤖</span> Bible AI
-            </button>
-          </div>
-
-          {activeTab === 'devotions' && (
-            <div>
-              {isGenerating ? (
-                <div className="loading">Loading today's devotion...</div>
-              ) : error ? (
-                <div className="error">⚠️ {error}</div>
-              ) : selectedDevotion ? (
-                <div className="devotion-card">
-                  <div className="card-header">
-                    <span className={`card-category ${selectedDevotionId === 'daily' ? 'today' : ''}`}>
-                      {selectedDevotionId === 'daily' ? '🌟 Today\'s Devotion' : (selectedDevotion.category || 'Faith')}
-                    </span>
-                    <span className="card-date">📅 {selectedDevotion.date || ''}</span>
-                  </div>
-                  <h2 className="card-title">{selectedDevotion.title}</h2>
-                  <div className="card-scripture">{selectedDevotion.scripture}</div>
-                  <p className="card-story">{selectedDevotion.story}</p>
-                  {selectedDevotion.prayer && (
-                    <div className="prayer-section">
-                      <div className="prayer-title">🙏 Prayer</div>
-                      <div className="prayer-text">{selectedDevotion.prayer}</div>
-                    </div>
-                  )}
+        {/* Chat */}
+        {activeTab === 'chat' && (
+          <div className="chat-container">
+            <div className="chat-messages">
+              {messages.length === 0 ? (
+                /* Welcome Screen */
+                <div className="welcome-screen">
+                  <div className="welcome-icon">📖</div>
+                  <h1 className="welcome-title">Ask Paul anything</h1>
+                  <p className="welcome-subtitle">
+                    Your Bible Study assistant. Ask about scripture, theology, or faith — and get clear, thoughtful answers from <span>Paul</span>.
+                  </p>
                 </div>
               ) : (
-                <div className="loading">No devotion selected. Click one from the sidebar.</div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'chat' && (
-            <div className="chat-container">
-              <div className="chat-messages">
-                {messages.map((message, index) => (
-                  <div key={index} className={`chat-message ${message.isUser ? 'user' : 'assistant'}`}>
-                    <div className="bubble">
-                      {message.isUser ? (
-                        message.text
-                      ) : (
-                        <div>{renderMessage(message.text)}</div>
-                      )}
-                      <span className="timestamp">
-                        {message.isUser ? 'You' : 'Assistant'} • {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                /* Messages */
+                <>
+                  {messages.map((message, index) => (
+                    <div key={index} className={`chat-message ${message.isUser ? 'user' : 'assistant'}`}>
+                      <div className="bubble">
+                        {!message.isUser && <span className="sender">Paul</span>}
+                        {message.isUser ? (
+                          message.text
+                        ) : (
+                          <div>{renderMessage(message.text)}</div>
+                        )}
+                        <span className="timestamp">
+                          {message.isUser ? 'You' : 'Paul'} • {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {isLoading && (
-                  <div className="chat-message assistant">
-                    <div className="bubble">
-                      <div className="typing-indicator">
+                  ))}
+                  {isLoading && (
+                    <div className="typing-indicator-wrapper">
+                      <div className="typing-dots">
                         <span></span>
                         <span></span>
                         <span></span>
                       </div>
+                      <span className="typing-label">Paul is typing...</span>
                     </div>
-                  </div>
-                )}
-                <div ref={chatEndRef} />
-              </div>
-
-              <form className="chat-input" onSubmit={(e) => {
-                e.preventDefault();
-                const input = e.target.elements.message.value;
-                if (input.trim() && !isLoading) {
-                  handleSendMessage(input.trim());
-                  e.target.elements.message.value = '';
-                }
-              }}>
-                <input name="message" type="text" placeholder="Ask a Bible question..." disabled={isLoading} autoComplete="off" />
-                <button type="submit" disabled={isLoading}>{isLoading ? '...' : 'Send →'}</button>
-              </form>
+                  )}
+                  <div ref={chatEndRef} />
+                </>
+              )}
             </div>
-          )}
 
-        </main>
-      </div>
+            <form className="chat-input" onSubmit={(e) => {
+              e.preventDefault();
+              const input = e.target.elements.message.value;
+              if (input.trim() && !isLoading) {
+                handleSendMessage(input.trim());
+                e.target.elements.message.value = '';
+              }
+            }}>
+              <input name="message" type="text" placeholder="Ask a Bible question..." disabled={isLoading} autoComplete="off" />
+              <button type="submit" disabled={isLoading}>{isLoading ? '...' : 'Send →'}</button>
+            </form>
+          </div>
+        )}
+      </main>
     </div>
   );
 }

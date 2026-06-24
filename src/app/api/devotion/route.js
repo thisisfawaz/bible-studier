@@ -1,22 +1,111 @@
 import { NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
+
+const DATA_FILE = path.join(process.cwd(), 'data', 'devotions.json');
+const MAX_DEVOTIONS = 10;
+
+// Ensure data directory exists
+function ensureDataDir() {
+  const dir = path.join(process.cwd(), 'data');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+// Read devotions from file
+function getDevotions() {
+  try {
+    ensureDataDir();
+    if (fs.existsSync(DATA_FILE)) {
+      const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      return data.devotions || [];
+    }
+  } catch (error) {
+    console.error('Error reading devotions:', error);
+  }
+  return [];
+}
+
+// Save devotions to file
+function saveDevotions(devotions) {
+  try {
+    ensureDataDir();
+    // Keep only the last MAX_DEVOTIONS
+    const trimmed = devotions.slice(-MAX_DEVOTIONS);
+    fs.writeFileSync(DATA_FILE, JSON.stringify({ devotions: trimmed }, null, 2));
+    return trimmed;
+  } catch (error) {
+    console.error('Error saving devotions:', error);
+    return devotions;
+  }
+}
+
+// Get today's date as string
+function getTodayDate() {
+  return new Date().toISOString().split('T')[0];
+}
+
+// Check if a devotion exists for today
+function getTodayDevotion(devotions) {
+  const today = getTodayDate();
+  return devotions.find(d => d.date === today) || null;
+}
 
 export async function GET() {
-  const today = new Date();
-  const dateStr = today.toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
+  const devotions = getDevotions();
+  const today = getTodayDate();
+  const todayDevotion = getTodayDevotion(devotions);
+
+  return NextResponse.json({
+    success: true,
+    today: todayDevotion,
+    recent: devotions.slice(-MAX_DEVOTIONS).reverse(),
+    count: devotions.length,
+    max: MAX_DEVOTIONS
   });
+}
 
-  const devotion = {
-    title: "God's Faithful Provision",
-    scripture: '"And my God will meet all your needs according to the riches of his glory in Christ Jesus." - Philippians 4:19',
-    story: "In the 19th century, George Müller opened orphanages in Bristol, England, without ever asking for money—only praying and trusting God to provide. One morning, the children sat down with nothing on the tables. Müller and his staff prayed, and within minutes, a baker arrived, explaining that God had awakened him to bake bread for the orphans. Soon after, a milkman appeared whose cart had broken down; rather than let the milk spoil, he gave it all away. That day, every child ate a full meal. Müller recorded over 50,000 specific answers to prayer over his lifetime—proving that God is never late, even when we see no way forward.",
-    category: "Faith",
-    date: dateStr,
-    prayer: "Heavenly Father, thank You for being our faithful Provider. Help us to trust You with our needs, knowing that You see us and care for us. When we face empty cupboards or uncertain futures, remind us of Your faithfulness in the past. Give us the courage to pray boldly and the patience to wait on Your perfect timing. In Jesus' name, Amen."
-  };
+export async function POST(request) {
+  try {
+    const { devotion } = await request.json();
+    
+    if (!devotion || !devotion.title) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid devotion data' },
+        { status: 400 }
+      );
+    }
 
-  return NextResponse.json({ success: true, devotion });
+    let devotions = getDevotions();
+    
+    // Check if today already has a devotion
+    const today = getTodayDate();
+    const existingIndex = devotions.findIndex(d => d.date === today);
+    
+    if (existingIndex !== -1) {
+      // Replace today's devotion
+      devotions[existingIndex] = { ...devotion, date: today };
+    } else {
+      // Add new devotion
+      devotions.push({ ...devotion, date: today });
+    }
+    
+    // Save (automatically keeps last 10)
+    const saved = saveDevotions(devotions);
+    
+    return NextResponse.json({
+      success: true,
+      devotion: saved.find(d => d.date === today),
+      recent: saved.slice(-MAX_DEVOTIONS).reverse(),
+      count: saved.length,
+      max: MAX_DEVOTIONS
+    });
+    
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
 }
