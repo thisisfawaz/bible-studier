@@ -484,36 +484,113 @@ body {
 }
 
 /* ========================================
-   14. SIDEBAR DARK THEME FIX
+   14. SIDEBAR FIX - Dark Theme
    ======================================== */
-.sidebar,
-.sidebar * {
-  color: #f7f4ef !important;
+/* Remove the blanket override that forces all text white */
+/* .sidebar, .sidebar * { color: #f7f4ef !important; } - REMOVED */
+
+/* Sidebar base styles */
+.sidebar {
+  background: #101012 !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
 }
 
-.sidebar .session-date,
-.sidebar .sidebar-title {
-  color: #6a6a6a !important;
+/* Session items - default state (not selected) */
+.sidebar .session-item {
+  color: #a3a3a3 !important;
 }
 
 .sidebar .session-item:hover {
   background: rgba(255, 255, 255, 0.06) !important;
+  color: #f7f4ef !important;
 }
 
+/* Session items - active/selected state */
 .sidebar .session-item.active {
-  background: rgba(124, 58, 237, 0.15) !important;
+  background: #2d2d30 !important;
+  color: #f7f4ef !important;
 }
 
 .sidebar .session-item.active .session-title {
-  color: #a78bfa !important;
+  color: #f7f4ef !important;
 }
 
+/* Session date text */
+.sidebar .session-date {
+  color: #6a6a6a !important;
+}
+
+/* Sidebar title */
+.sidebar .sidebar-title {
+  color: #6a6a6a !important;
+}
+
+/* Sidebar user info */
 .sidebar-user .name {
   color: #f7f4ef !important;
 }
 
 .sidebar-user .plan {
   color: #6a6a6a !important;
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  color: #a3a3a3 !important;
+}
+.sidebar-close:hover {
+  color: #f7f4ef !important;
+}
+
+/* ========================================
+   15. SIDEBAR FIX - Light Theme
+   ======================================== */
+.app.light .sidebar {
+  background: #f0f0f2 !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+.app.light .sidebar .session-item {
+  color: #4a4a5e !important;
+}
+
+.app.light .sidebar .session-item:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: #1a1a24 !important;
+}
+
+.app.light .sidebar .session-item.active {
+  background: #ffffff !important;
+  color: #1a1a24 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+.app.light .sidebar .session-item.active .session-title {
+  color: #1a1a24 !important;
+}
+
+.app.light .sidebar .session-date {
+  color: #8a8a9e !important;
+}
+
+.app.light .sidebar .sidebar-title {
+  color: #8a8a9e !important;
+}
+
+.app.light .sidebar-user .name {
+  color: #1a1a24 !important;
+}
+
+.app.light .sidebar-user .plan {
+  color: #8a8a9e !important;
+}
+
+.app.light .sidebar-close {
+  color: #4a4a5e !important;
+}
+.app.light .sidebar-close:hover {
+  color: #1a1a24 !important;
 }
 
 /* Prevent flash of content */

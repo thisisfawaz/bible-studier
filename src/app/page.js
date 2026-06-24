@@ -41,7 +41,6 @@ function renderMessage(text) {
   const paragraphs = text.split(/\n\n|\n/).filter(p => p.trim());
   
   return paragraphs.map((paragraph, index) => {
-    // Check if it's a bullet point list
     if (paragraph.includes('•') || paragraph.includes('-')) {
       const lines = paragraph.split('\n');
       return (
@@ -62,7 +61,6 @@ function renderMessage(text) {
       );
     }
     
-    // Check if it's a heading
     if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
       return (
         <p key={index} className="msg-paragraph font-bold text-lg mt-3 mb-3">
@@ -71,9 +69,8 @@ function renderMessage(text) {
       );
     }
     
-    // Regular paragraph
     return (
-      <p key={index} className="msg-paragraph mb-5">
+      <p key={index} className="msg-paragraph mb-4">
         {renderInlineContent(paragraph)}
       </p>
     );
@@ -84,9 +81,6 @@ function renderMessage(text) {
 // HOME COMPONENT
 // ============================================================
 export default function Home() {
-  // ============================================================
-  // STATE — All useState hooks first
-  // ============================================================
   const [isMounted, setIsMounted] = useState(false);
   const [activeTab, setActiveTab] = useState('devotions');
   const [darkMode, setDarkMode] = useState(true);
@@ -123,16 +117,10 @@ export default function Home() {
     ));
   };
 
-  // ============================================================
-  // ALL useEffect Hooks
-  // ============================================================
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // ============================================================
-  // URL HANDLING — Update URL when devotion is selected
-  // ============================================================
   const updateUrl = (devotionId) => {
     const url = new URL(window.location);
     if (devotionId && devotionId !== 'daily') {
@@ -149,9 +137,6 @@ export default function Home() {
     updateUrl(id);
   };
 
-  // ============================================================
-  // LOAD DAILY DEVOTION
-  // ============================================================
   useEffect(() => {
     async function loadDailyDevotion() {
       try {
@@ -159,9 +144,7 @@ export default function Home() {
         const data = await response.json();
         if (data.success) {
           setDailyDevotion(data.devotion);
-          // Only set to 'daily' if no other selection exists
           if (selectedDevotionId === null || selectedDevotionId === devotions[0]?.id) {
-            // Check if URL has a devotion param
             const params = new URLSearchParams(window.location.search);
             const devotionParam = params.get('devotion');
             if (devotionParam) {
@@ -176,7 +159,6 @@ export default function Home() {
           }
         }
       } catch (err) {
-        // Keep showing first devotion if API fails
         console.error('Failed to load devotion:', err);
       } finally {
         setIsGenerating(false);
@@ -185,9 +167,6 @@ export default function Home() {
     loadDailyDevotion();
   }, []);
 
-  // ============================================================
-  // HANDLE SHARED LINK FROM URL
-  // ============================================================
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const devotionParam = params.get('devotion');
@@ -205,43 +184,28 @@ export default function Home() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  // ============================================================
-  // GET SELECTED DEVOTION
-  // ============================================================
   const getSelectedDevotion = () => {
-    // If 'daily' is selected and dailyDevotion exists, show it
     if (selectedDevotionId === 'daily' && dailyDevotion) {
       return dailyDevotion;
     }
-    
-    // If a specific devotion is selected (number), find it
     if (selectedDevotionId !== null && typeof selectedDevotionId === 'number') {
       const found = devotions.find(d => d.id === selectedDevotionId);
       if (found) {
         return found;
       }
     }
-    
-    // If nothing else works, show the first devotion
     if (devotions.length > 0) {
       return devotions[0];
     }
-    
     return null;
   };
 
   const selectedDevotion = getSelectedDevotion();
 
-  // ============================================================
-  // EARLY RETURN — AFTER ALL HOOKS
-  // ============================================================
   if (!isMounted) {
     return <div style={{ backgroundColor: '#101012', minHeight: '100vh' }} />;
   }
 
-  // ============================================================
-  // FUNCTIONS
-  // ============================================================
   const handleSendMessage = async (userMessage) => {
     const updatedMessages = [...messages, { text: userMessage, isUser: true }];
     updateMessages(updatedMessages);
@@ -340,9 +304,6 @@ export default function Home() {
     }
   };
 
-  // ============================================================
-  // SHARE FUNCTION — Direct Link to Specific Devotion
-  // ============================================================
   const handleShare = async (devotion) => {
     const baseUrl = window.location.origin;
     const shareUrl = `${baseUrl}/?devotion=${devotion.id}`;
@@ -407,23 +368,23 @@ export default function Home() {
         }
 
         /* ============================================================
-           LIGHT THEME — Improved Contrast
+           LIGHT THEME — Inverse of dark
            ============================================================ */
         .app.light {
-          --bg-primary: #e8e8ea;
-          --bg-secondary: #f5f5f7;
+          --bg-primary: #f0f0f2;
+          --bg-secondary: #ffffff;
           --bg-card: #ffffff;
-          --bg-hover: rgba(0,0,0,0.06);
-          --bg-active: rgba(0,0,0,0.08);
+          --bg-hover: rgba(0,0,0,0.04);
+          --bg-active: rgba(0,0,0,0.06);
           --text-primary: #1a1a24;
           --text-secondary: #4a4a5e;
           --text-muted: #8a8a9e;
-          --border-color: rgba(0,0,0,0.15);
-          --border-light: rgba(0,0,0,0.25);
-          --shadow: rgba(0,0,0,0.08);
+          --border-color: rgba(0,0,0,0.1);
+          --border-light: rgba(0,0,0,0.18);
+          --shadow: rgba(0,0,0,0.06);
           --accent-pink: #fd429c;
-          --accent-purple: #7f22fe;
-          --accent-gradient: linear-gradient(135deg, #fd429c, #7f22fe);
+          --accent-purple: #7c22fe;
+          --accent-gradient: linear-gradient(135deg, #fd429c, #7c22fe);
         }
 
         ::-webkit-scrollbar { width: 4px; }
@@ -568,6 +529,8 @@ export default function Home() {
           overflow-y: auto;
           padding: 0 4px;
         }
+        
+        /* ===== FIXED: SESSION ITEM STYLES ===== */
         .session-item {
           display: flex;
           align-items: center;
@@ -576,22 +539,58 @@ export default function Home() {
           border-radius: var(--radius-full);
           cursor: pointer;
           transition: all 0.15s;
-          color: var(--text-secondary);
           font-size: 13px;
         }
-        .session-item:hover {
+        
+        /* Dark mode - default state */
+        .app.dark .session-item {
+          color: #a3a3a3;
+        }
+        .app.dark .session-item:hover {
           background: var(--bg-hover);
-          color: var(--text-primary);
+          color: #f7f4ef;
         }
-        .session-item.active {
-          background: var(--bg-active);
-          color: var(--text-primary);
+        .app.dark .session-item.active {
+          background: #2d2d30;
+          color: #f7f4ef;
         }
-        .session-item .icon { font-size: 14px; flex-shrink: 0; opacity: 0.5; }
-        .session-item.active .icon { opacity: 1; }
-        .session-info { flex: 1; min-width: 0; }
-        .session-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .session-date { font-size: 11px; color: var(--text-muted); }
+        
+        /* Light mode - default state */
+        .app.light .session-item {
+          color: #4a4a5e;
+        }
+        .app.light .session-item:hover {
+          background: var(--bg-hover);
+          color: #1a1a24;
+        }
+        .app.light .session-item.active {
+          background: #ffffff;
+          color: #1a1a24;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+          border: 1px solid var(--border-color);
+        }
+        
+        .session-item .icon { 
+          font-size: 14px; 
+          flex-shrink: 0; 
+          opacity: 0.5; 
+        }
+        .session-item.active .icon { 
+          opacity: 1; 
+        }
+        .session-info { 
+          flex: 1; 
+          min-width: 0; 
+        }
+        .session-title { 
+          white-space: nowrap; 
+          overflow: hidden; 
+          text-overflow: ellipsis;
+        }
+        .session-date { 
+          font-size: 11px; 
+          color: var(--text-muted); 
+        }
 
         .sidebar-footer {
           border-top: 1px solid var(--border-color);
@@ -682,23 +681,17 @@ export default function Home() {
           height: 98vh;
         }
 
+        /* ============================================================
+           MAIN HEADER — Only hamburger menu now
+           ============================================================ */
         .main-header {
           display: flex;
-          justify-content: space-between;
+          justify-content: flex-start;
           align-items: center;
-          margin-bottom: 24px;
+          margin-bottom: 0;
+          min-height: 40px;
         }
-        .main-header .title {
-          font-size: 22px;
-          font-weight: 500;
-          letter-spacing: -0.02em;
-        }
-        .main-header .title .gradient-text {
-          background: var(--accent-gradient);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
+
         .header-actions {
           display: flex;
           align-items: center;
@@ -726,30 +719,32 @@ export default function Home() {
         }
         .header-actions .theme-btn .icon { font-size: 14px; }
 
+        /* ============================================================
+           TABS — Clean with underline indicator
+           ============================================================ */
         .tabs {
-          flex-shrink: 0;
           display: flex;
-          gap: 4px;
-          background: var(--bg-secondary);
-          padding: 4px;
-          border-radius: var(--radius);
-          border: 1px solid var(--border-color);
-          margin-bottom: 24px;
-          transition: background 0.3s ease, border-color 0.3s ease;
-        }
-        .app.light .tabs {
-          background: #dddde0;
-          border-color: rgba(0,0,0,0.12);
-        }
-        .tab-btn {
-          flex: 1;
-          padding: 8px 16px;
+          gap: 0;
+          background: transparent;
+          padding: 0;
+          border-radius: 0;
           border: none;
-          border-radius: 8px;
+          border-bottom: 1px solid var(--border-color);
+          margin-bottom: 16px;
+          transition: border-color 0.3s ease;
+          flex-shrink: 0;
+          position: relative;
+        }
+
+        .tab-btn {
+          flex: none;
+          padding: 10px 20px;
+          border: none;
+          border-radius: 0;
           font-size: 14px;
-          font-weight: 450;
+          font-weight: 500;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.25s ease;
           background: transparent;
           color: var(--text-secondary);
           font-family: var(--font);
@@ -757,19 +752,43 @@ export default function Home() {
           align-items: center;
           justify-content: center;
           gap: 8px;
+          position: relative;
+          padding-bottom: 12px;
         }
+
         .tab-btn:hover { 
           color: var(--text-primary);
-          background: rgba(124, 58, 237, 0.06);
+          background: transparent;
         }
+
         .tab-btn.active {
-          background: #7c3aed;
-          color: #ffffff;
-          box-shadow: 0 2px 12px rgba(124, 58, 237, 0.3);
+          color: var(--text-primary);
+          background: transparent;
+          box-shadow: none;
         }
-        .tab-btn.active:hover {
-          background: #6d28d9;
+
+        /* Underline indicator */
+        .tab-btn::after {
+          content: '';
+          position: absolute;
+          bottom: 0;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 0;
+          height: 2px;
+          background: #ffffff;
+          transition: width 0.3s ease;
+          border-radius: 2px;
         }
+
+        .app.light .tab-btn::after {
+          background: #1a1a24;
+        }
+
+        .tab-btn.active::after {
+          width: 60%;
+        }
+
         .tab-btn .icon { 
           font-size: 16px; 
           font-weight: 400; 
@@ -778,16 +797,23 @@ export default function Home() {
           align-items: center;
           justify-content: center;
         }
+
         .tab-btn .tab-icon svg {
           width: 18px;
           height: 18px;
           stroke: currentColor;
         }
+
         .tab-btn.active .icon { 
           opacity: 1; 
         }
+
         .tab-btn.active .tab-icon svg {
-          stroke: #ffffff;
+          stroke: var(--text-primary);
+        }
+
+        .tab-btn .icon-label {
+          font-size: 14px;
         }
 
         /* ============================================================
@@ -801,13 +827,7 @@ export default function Home() {
           border: 1px solid var(--border-color);
           transition: all 0.25s;
         }
-        .devotion-card:hover {
-          border-color: var(--border-light);
-          background: rgba(255,255,255,0.02);
-        }
-        .app.light .devotion-card:hover {
-          background: rgba(0,0,0,0.01);
-        }
+        
         .card-header {
           display: flex;
           justify-content: space-between;
@@ -829,11 +849,17 @@ export default function Home() {
         }
         .app.light .card-category {
           background: rgba(0,0,0,0.04);
+          color: var(--text-secondary);
         }
         .card-category.today {
-          background: rgba(253, 66, 156, 0.12);
-          color: var(--accent-pink);
-          border-color: rgba(253, 66, 156, 0.2);
+          background: rgba(255, 255, 255, 0.06);
+          color: #a3a3a3;
+          border-color: rgba(255, 255, 255, 0.1);
+        }
+        .app.light .card-category.today {
+          background: rgba(0,0,0,0.06);
+          color: #6a6a7e;
+          border-color: rgba(0,0,0,0.1);
         }
         .card-date {
           font-size: 12px;
@@ -848,45 +874,57 @@ export default function Home() {
         }
         .card-scripture {
           background: rgba(255,255,255,0.03);
-          border-left: 3px solid var(--accent-pink);
+          border-left: 3px solid #ffffff;
           padding: 8px 14px;
           margin-bottom: 12px;
           border-radius: 0 6px 6px 0;
           font-size: 14px;
-          color: var(--text-secondary);
+          color: #f7f4ef;
           font-style: italic;
         }
         .app.light .card-scripture {
           background: rgba(0,0,0,0.02);
+          border-left: 3px solid #7c22fe;
+          color: #4a4a5e;
         }
         .card-story {
-          color: var(--text-secondary);
+          color: #c8c8d0;
           font-size: 15px;
           line-height: 1.7;
           margin-bottom: 12px;
         }
+        .app.light .card-story {
+          color: #4a4a5e;
+        }
         .prayer-section {
           background: rgba(255,255,255,0.02);
-          border-left: 3px solid var(--accent-purple);
+          border-left: 3px solid #ffffff;
           padding: 12px 16px;
           border-radius: 0 6px 6px 0;
           margin-top: 4px;
         }
         .app.light .prayer-section {
+          border-left: 3px solid #7c22fe;
           background: rgba(0,0,0,0.02);
         }
         .prayer-title {
           font-size: 13px;
           font-weight: 500;
-          color: var(--accent-purple);
+          color: #ffffff;
           margin-bottom: 4px;
           letter-spacing: 0.02em;
         }
+        .app.light .prayer-title {
+          color: #7c22fe;
+        }
         .prayer-text {
-          color: var(--text-secondary);
+          color: #f7f4ef;
           font-size: 14px;
           line-height: 1.7;
           font-style: italic;
+        }
+        .app.light .prayer-text {
+          color: #4a4a5e;
         }
 
         /* ============================================================
@@ -967,7 +1005,7 @@ export default function Home() {
           display: flex;
           flex-direction: column;
           flex: 1;
-          height: calc(100vh - 180px);
+          height: calc(100vh - 120px);
           min-height: 0;
           transition: background 0.3s ease, border-color 0.3s ease;
         }
@@ -1197,67 +1235,33 @@ export default function Home() {
           }
           .main-header .title { font-size: 18px; }
           
-          /* ============================================================
-            TABS — Mobile Layout
-            ============================================================ */
           .tabs {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 4px;
-            background: var(--bg-secondary);
-            padding: 4px;
-            border-radius: var(--radius);
-            border: 1px solid var(--border-color);
+            display: flex;
+            gap: 0;
+            background: transparent;
+            padding: 0;
+            border-radius: 0;
+            border: none;
+            border-bottom: 1px solid var(--border-color);
             margin-bottom: 12px;
-            transition: background 0.3s ease, border-color 0.3s ease;
-            flex-shrink: 0;
-          }
-          
-          /* Reels tab — spans full width */
-          .tab-btn.reels-tab {
-            grid-column: 1 / -1;
-            padding: 10px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
           }
           
           .tab-btn {
-            padding: 10px 8px;
+            flex: none;
+            padding: 10px 16px;
             font-size: 13px;
-            font-weight: 500;
-            border-radius: 8px;
-            border: none;
-            cursor: pointer;
-            transition: all 0.2s;
-            background: transparent;
-            color: var(--text-secondary);
-            font-family: var(--font);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-          }
-          
-          .tab-btn .icon { 
-            font-size: 16px; 
-            font-weight: 400; 
-            opacity: 0.6;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .tab-btn .tab-icon svg {
-            width: 18px;
-            height: 18px;
-            stroke: currentColor;
-          }
-          .tab-btn.active .icon { 
-            opacity: 1; 
-          }
-          .tab-btn.active .tab-icon svg {
-            stroke: #ffffff;
+            padding-bottom: 12px;
+            white-space: nowrap;
           }
           
           .tab-btn .icon-label {
-            font-size: 12px;
+            font-size: 13px;
+          }
+          
+          .tab-btn.reels-tab {
+            padding: 10px 16px;
           }
           
           .devotion-card { padding: 14px; }
@@ -1270,9 +1274,7 @@ export default function Home() {
           }
           .chat-messages { padding: 12px; }
           
-          /* ============================================================
-            CHAT INPUT — Mobile
-            ============================================================ */
+          /* Chat Input — Mobile */
           .chat-input { 
             padding: 8px 12px;
             flex-shrink: 0;
@@ -1320,8 +1322,25 @@ export default function Home() {
           .main-header { flex-direction: column; align-items: flex-start; gap: 12px; }
           .header-actions { width: 100%; justify-content: flex-start; }
           
-          .tabs { flex-direction: column; }
-          .tab-btn { padding: 10px; }
+          .tabs {
+            flex-direction: row;
+            overflow-x: auto;
+          }
+          
+          .tab-btn {
+            padding: 8px 12px;
+            font-size: 12px;
+            padding-bottom: 10px;
+          }
+          
+          .tab-btn .icon-label {
+            font-size: 12px;
+          }
+          
+          .tab-btn .tab-icon svg {
+            width: 16px;
+            height: 16px;
+          }
           
           .devotion-card { padding: 12px; }
           .card-title { font-size: 16px; }
@@ -1429,12 +1448,6 @@ export default function Home() {
               <span className="hamburger-line"></span>
               <span className="hamburger-line"></span>
             </button>
-            <a href="/" style={{ textDecoration: 'none' }}>
-              <div className="title">
-                <span style={{ color: 'var(--text-primary)' }}>Bible </span>
-                <span className="gradient-text">Studier</span>
-              </div>
-            </a>
           </div>
         </div>
 
@@ -1521,7 +1534,6 @@ export default function Home() {
 
                 {/* ACTION BUTTONS — PDF & Share */}
                 <div className="action-buttons">
-                  {/* Download PDF */}
                   <button
                     onClick={() => handleDownloadPDF(selectedDevotion)}
                     className="action-btn"
@@ -1535,7 +1547,6 @@ export default function Home() {
                     PDF
                   </button>
 
-                  {/* Share */}
                   <button
                     onClick={() => handleShare(selectedDevotion)}
                     className="action-btn"
