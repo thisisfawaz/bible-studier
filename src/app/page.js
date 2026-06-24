@@ -4,95 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { devotions } from './data/devotions';
 import ReelsFeed from './components/ReelsFeed';
 
-function renderMessage(text) {
-  if (!text) return "";
-
-  const lines = text.split("\n");
-  const elements = [];
-  let i = 0;
-  let inCodeBlock = false;
-  let codeContent = [];
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    if (line.trim().startsWith("```")) {
-      if (!inCodeBlock) {
-        inCodeBlock = true;
-        codeContent = [];
-        i++;
-        continue;
-      } else {
-        inCodeBlock = false;
-        elements.push(
-          <pre key={`code-${i}`} className="code-block">
-            <code>{codeContent.join("\n")}</code>
-          </pre>
-        );
-        i++;
-        continue;
-      }
-    }
-
-    if (inCodeBlock) {
-      codeContent.push(line);
-      i++;
-      continue;
-    }
-
-    if (line.startsWith("### ")) {
-      elements.push(<h3 key={i} className="msg-h3">{line.replace("### ", "")}</h3>);
-      i++;
-      continue;
-    }
-
-    if (line.startsWith("## ")) {
-      elements.push(<h2 key={i} className="msg-h2">{line.replace("## ", "")}</h2>);
-      i++;
-      continue;
-    }
-
-    if (line.trim() === "") {
-      elements.push(<div key={i} style={{ height: "4px" }}></div>);
-      i++;
-      continue;
-    }
-
-    const numbered = line.match(/^(\d+)\.\s(.*)/);
-    if (numbered) {
-      elements.push(
-        <div key={i} className="msg-list-item">
-          <b>{numbered[1]}.</b> {renderInlineContent(numbered[2])}
-        </div>
-      );
-      i++;
-      continue;
-    }
-
-    const bullet = line.match(/^-\s(.*)/);
-    if (bullet) {
-      elements.push(
-        <div key={i} className="msg-list-item">
-          • {renderInlineContent(bullet[1])}
-        </div>
-      );
-      i++;
-      continue;
-    }
-
-    if (line.trim()) {
-      elements.push(
-        <p key={i} className="msg-paragraph">
-          {renderInlineContent(line)}
-        </p>
-      );
-    }
-    i++;
-  }
-
-  return elements;
-}
-
+// ============================================================
+// RENDER FUNCTIONS
+// ============================================================
 function renderInlineContent(text) {
   if (!text) return "";
 
@@ -121,6 +35,54 @@ function renderInlineContent(text) {
   return parts;
 }
 
+function renderMessage(text) {
+  if (!text) return "";
+
+  const paragraphs = text.split(/\n\n|\n/).filter(p => p.trim());
+  
+  return paragraphs.map((paragraph, index) => {
+    // Check if it's a bullet point list
+    if (paragraph.includes('•') || paragraph.includes('-')) {
+      const lines = paragraph.split('\n');
+      return (
+        <div key={index} className="mb-4">
+          {lines.map((line, i) => {
+            const cleanLine = line.replace(/^[•\-]\s*/, '').trim();
+            if (cleanLine) {
+              return (
+                <div key={i} className="flex items-start gap-2 mb-1">
+                  <span className="text-indigo-400 font-bold">•</span>
+                  <span className="flex-1">{renderInlineContent(cleanLine)}</span>
+                </div>
+              );
+            }
+            return null;
+          })}
+        </div>
+      );
+    }
+    
+    // Check if it's a heading
+    if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
+      return (
+        <p key={index} className="msg-paragraph font-bold text-lg mt-3 mb-3">
+          {renderInlineContent(paragraph.replace(/\*\*/g, ''))}
+        </p>
+      );
+    }
+    
+    // Regular paragraph
+    return (
+      <p key={index} className="msg-paragraph mb-5">
+        {renderInlineContent(paragraph)}
+      </p>
+    );
+  });
+}
+
+// ============================================================
+// HOME COMPONENT
+// ============================================================
 export default function Home() {
   // ============================================================
   // STATE — All useState hooks first
@@ -1176,7 +1138,7 @@ export default function Home() {
           cursor: not-allowed;
         }
 
-        .msg-paragraph { margin: 4px 0; line-height: 1.6; }
+        .msg-paragraph { margin-bottom: 1.5rem; line-height: 1.8; }
         .msg-h2 { font-size: 18px; font-weight: 500; margin: 8px 0 4px; color: var(--text-primary); }
         .msg-h3 { font-size: 15px; font-weight: 500; margin: 6px 0 3px; color: var(--text-primary); }
         .msg-list-item { margin: 2px 0; padding-left: 4px; color: var(--text-secondary); }
