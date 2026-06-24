@@ -13,13 +13,31 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: "Bible Studier",
-  description: "Daily Devotionals & AI Bible Study Assistant",
+  description: "Daily Devotionals & Bible Study Assistant",
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>{children}</body>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      style={{ background: '#101012' }}
+    >
+      <body className="min-h-full flex flex-col" style={{ background: '#101012' }}>
+        {children}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                var el = document.getElementById('__next');
+                if (el) {
+                  el.classList.add('loaded');
+                }
+              })();
+            `,
+          }}
+        />
+      </body>
     </html>
   );
 }

@@ -122,6 +122,10 @@ function renderInlineContent(text) {
 }
 
 export default function Home() {
+  // ============================================================
+  // STATE — All useState hooks first
+  // ============================================================
+  const [isMounted, setIsMounted] = useState(false);
   const [activeTab, setActiveTab] = useState('devotions');
   const [darkMode, setDarkMode] = useState(true);
   const [showReels, setShowReels] = useState(false);
@@ -156,6 +160,13 @@ export default function Home() {
         : session
     ));
   };
+
+  // ============================================================
+  // ALL useEffect Hooks
+  // ============================================================
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // ============================================================
   // URL HANDLING — Update URL when devotion is selected
@@ -259,6 +270,16 @@ export default function Home() {
 
   const selectedDevotion = getSelectedDevotion();
 
+  // ============================================================
+  // EARLY RETURN — AFTER ALL HOOKS
+  // ============================================================
+  if (!isMounted) {
+    return <div style={{ backgroundColor: '#101012', minHeight: '100vh' }} />;
+  }
+
+  // ============================================================
+  // FUNCTIONS
+  // ============================================================
   const handleSendMessage = async (userMessage) => {
     const updatedMessages = [...messages, { text: userMessage, isUser: true }];
     updateMessages(updatedMessages);
@@ -389,7 +410,7 @@ export default function Home() {
   };
 
   return (
-    <div className={`app ${darkMode ? '' : 'light'}`}>
+    <div className={`app ${darkMode ? 'dark' : 'light'}`}>
       <style jsx>{`
         /* ============================================================
            DARK THEME (Default)
@@ -1293,22 +1314,22 @@ export default function Home() {
           .chat-input { 
             padding: 8px 12px;
             flex-shrink: 0;
-            gap: 6px;
-            display: flex;
+            gap: 8px;
+            display: flex !important;
+            flex-direction: row !important;
             align-items: center;
           }
           .chat-input input {
-            flex: 3;
-            padding: 8px 12px;
+            flex: 1;
+            padding: 10px 14px;
             font-size: 14px;
+            min-width: 0;
           }
           .send-btn {
-            flex: 1;
-            padding: 8px 12px;
+            padding: 10px 14px;
             font-size: 13px;
-            min-width: 60px;
-            text-align: center;
-            justify-content: center;
+            white-space: nowrap;
+            width: auto;
           }
           
           .chat-message .bubble { max-width: 90%; font-size: 14px; }
