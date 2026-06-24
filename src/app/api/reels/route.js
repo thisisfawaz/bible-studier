@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
-// Elevation Church Channel ID (your existing one)
-const ELEVATION_CHANNEL_ID = 'UCDDSmXjv5vXqXo6OYuu83CA';
+// Your playlist ID
+const PLAYLIST_ID = 'PLifoTByOCDdyfFNH-OsDHcXhA9qpyzy3m';
 
 export async function GET() {
   try {
@@ -14,38 +14,40 @@ export async function GET() {
       );
     }
 
-    // The key difference: adding `&videoDuration=short` to the API call
+    // Fetch directly from your playlist
     const response = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?key=${apiKey}&channelId=${ELEVATION_CHANNEL_ID}&part=snippet,id&order=date&maxResults=30&type=video&videoDuration=short`
+      `https://www.googleapis.com/youtube/v3/playlistItems?key=${apiKey}&playlistId=${PLAYLIST_ID}&part=snippet&maxResults=50`
     );
 
     if (!response.ok) {
       const errorData = await response.json();
       return NextResponse.json(
-        { error: errorData.error?.message || 'Failed to fetch videos' },
+        { error: errorData.error?.message || 'Failed to fetch playlist' },
         { status: response.status }
       );
     }
 
     const data = await response.json();
 
-    // Map the results to your video format
-    const videos = data.items.map((item) => ({
-      id: item.id.videoId,
-      title: item.snippet.title,
-      description: item.snippet.description,
-      thumbnail: item.snippet.thumbnails.medium.url,
-      channelTitle: item.snippet.channelTitle,
-      channelId: item.snippet.channelId,
-      publishedAt: item.snippet.publishedAt,
-    }));
+    // Filter out any private or deleted videos
+    const videos = data.items
+      .filter(item => item.snippet.title !== 'Private video' && item.snippet.title !== 'Deleted video')
+      .map((item) => ({
+        id: item.snippet.resourceId.videoId,
+        title: item.snippet.title,
+        description: item.snippet.description,
+        thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
+        channelTitle: item.snippet.channelTitle,
+        channelId: item.snippet.channelId,
+        publishedAt: item.snippet.publishedAt,
+      }));
 
-    // Shuffle the results
+    // Shuffle the videos
     const shuffled = videos.sort(() => Math.random() - 0.5);
 
     return NextResponse.json({
       success: true,
-      videos: shuffled.slice(0, 15), // Return up to 15 videos
+      videos: shuffled.slice(0, 20),
       count: shuffled.length,
     });
 
