@@ -285,7 +285,7 @@ export default function ReelsFeed({ onClose }) {
                     videoRefs.current[video.id] = el;
                   }
                 }}
-                src={`https://www.youtube.com/embed/${video.id}?autoplay=0&rel=0&controls=0&mute=1&loop=1&playlist=${video.id}&enablejsapi=1`}
+                src={`https://www.youtube.com/embed/${video.id}?autoplay=0&rel=0&controls=0&loop=1&playlist=${video.id}&enablejsapi=1`}
                 title={video.title}
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

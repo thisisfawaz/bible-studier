@@ -143,7 +143,7 @@ export default function Home() {
   const [error, setError] = useState(null);
   const chatEndRef = useRef(null);
 
-  const [selectedDevotionId, setSelectedDevotionId] = useState(null);
+  const [selectedDevotionId, setSelectedDevotionId] = useState(devotions[0]?.id || null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const currentSession = chatSessions.find(s => s.id === currentSessionId);
@@ -187,7 +187,7 @@ export default function Home() {
         if (data.success) {
           setDailyDevotion(data.devotion);
           // Only set to 'daily' if no other selection exists
-          if (selectedDevotionId === null) {
+          if (selectedDevotionId === null || selectedDevotionId === devotions[0]?.id) {
             // Check if URL has a devotion param
             const params = new URLSearchParams(window.location.search);
             const devotionParam = params.get('devotion');
@@ -201,11 +201,10 @@ export default function Home() {
             }
             setSelectedDevotionId('daily');
           }
-        } else {
-          setError(data.error || 'Failed to load devotion');
         }
       } catch (err) {
-        setError(err.message || 'Failed to load devotion');
+        // Keep showing first devotion if API fails
+        console.error('Failed to load devotion:', err);
       } finally {
         setIsGenerating(false);
       }
@@ -237,9 +236,9 @@ export default function Home() {
   // GET SELECTED DEVOTION
   // ============================================================
   const getSelectedDevotion = () => {
-    // If 'daily' is selected, show daily devotion
-    if (selectedDevotionId === 'daily') {
-      return dailyDevotion || null;
+    // If 'daily' is selected and dailyDevotion exists, show it
+    if (selectedDevotionId === 'daily' && dailyDevotion) {
+      return dailyDevotion;
     }
     
     // If a specific devotion is selected (number), find it
@@ -250,12 +249,7 @@ export default function Home() {
       }
     }
     
-    // If nothing is selected but daily exists, show daily
-    if (dailyDevotion) {
-      return dailyDevotion;
-    }
-    
-    // If daily doesn't exist but there are devotions, show the first one
+    // If nothing else works, show the first devotion
     if (devotions.length > 0) {
       return devotions[0];
     }
@@ -716,7 +710,7 @@ export default function Home() {
           font-weight: 500;
           letter-spacing: -0.02em;
         }
-        .main-header .title span {
+        .main-header .title .gradient-text {
           background: var(--accent-gradient);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
@@ -1220,8 +1214,67 @@ export default function Home() {
           }
           .main-header .title { font-size: 18px; }
           
+          /* ============================================================
+            TABS — Mobile Layout
+            ============================================================ */
           .tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            background: var(--bg-secondary);
+            padding: 4px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            margin-bottom: 12px;
+            transition: background 0.3s ease, border-color 0.3s ease;
             flex-shrink: 0;
+          }
+          
+          /* Reels tab — spans full width */
+          .tab-btn.reels-tab {
+            grid-column: 1 / -1;
+            padding: 10px;
+          }
+          
+          .tab-btn {
+            padding: 10px 8px;
+            font-size: 13px;
+            font-weight: 500;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: var(--font);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+          }
+          
+          .tab-btn .icon { 
+            font-size: 16px; 
+            font-weight: 400; 
+            opacity: 0.6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .tab-btn .tab-icon svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+          }
+          .tab-btn.active .icon { 
+            opacity: 1; 
+          }
+          .tab-btn.active .tab-icon svg {
+            stroke: #ffffff;
+          }
+          
+          .tab-btn .icon-label {
+            font-size: 12px;
           }
           
           .devotion-card { padding: 14px; }
@@ -1233,10 +1286,31 @@ export default function Home() {
             height: 100%;
           }
           .chat-messages { padding: 12px; }
+          
+          /* ============================================================
+            CHAT INPUT — Mobile
+            ============================================================ */
           .chat-input { 
             padding: 8px 12px;
             flex-shrink: 0;
+            gap: 6px;
+            display: flex;
+            align-items: center;
           }
+          .chat-input input {
+            flex: 3;
+            padding: 8px 12px;
+            font-size: 14px;
+          }
+          .send-btn {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 13px;
+            min-width: 60px;
+            text-align: center;
+            justify-content: center;
+          }
+          
           .chat-message .bubble { max-width: 90%; font-size: 14px; }
           .welcome-screen .welcome-title { font-size: 22px; }
           .welcome-screen .welcome-icon { font-size: 48px; }
@@ -1251,10 +1325,6 @@ export default function Home() {
           .action-btn .btn-icon {
             width: 16px;
             height: 16px;
-          }
-          .send-btn {
-            font-size: 12px;
-            padding: 6px 14px;
           }
         }
 
@@ -1376,7 +1446,12 @@ export default function Home() {
               <span className="hamburger-line"></span>
               <span className="hamburger-line"></span>
             </button>
-            <div className="title">Bible <span>Studier</span></div>
+            <a href="/" style={{ textDecoration: 'none' }}>
+              <div className="title">
+                <span style={{ color: 'var(--text-primary)' }}>Bible </span>
+                <span className="gradient-text">Studier</span>
+              </div>
+            </a>
           </div>
         </div>
 
@@ -1415,7 +1490,7 @@ export default function Home() {
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
             </span>
-            <span className="icon-label">Paul</span>
+            <span className="icon-label">Paul (Bible Assistant)</span>
           </button>
 
           <button
@@ -1441,9 +1516,7 @@ export default function Home() {
         {/* Devotionals */}
         {activeTab === 'devotions' && (
           <div className="devotions-scroll">
-            {isGenerating ? (
-              <div className="loading">Loading today's devotion...</div>
-            ) : error ? (
+            {error ? (
               <div className="error">⚠️ {error}</div>
             ) : selectedDevotion ? (
               <div className="devotion-card">
