@@ -1230,7 +1230,7 @@ export default function Home() {
           
           .main { 
             padding: 16px 16px 0; 
-            height: 98vh; 
+            height: 95vh; 
             overflow: hidden; 
           }
           .main-header .title { font-size: 18px; }
@@ -1352,7 +1352,7 @@ export default function Home() {
         @media (max-width: 480px) {
           .main { 
             padding: 12px 12px 0; 
-            height: 98vh; 
+            height: 95vh; 
             overflow: hidden; 
           }
           .main-header { flex-direction: column; align-items: flex-start; gap: 12px; }
