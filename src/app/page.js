@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { devotions } from './data/devotions';
+import ReelsFeed from './components/ReelsFeed';
 
 function renderMessage(text) {
   if (!text) return "";
@@ -123,11 +124,7 @@ function renderInlineContent(text) {
 export default function Home() {
   const [activeTab, setActiveTab] = useState('devotions');
   const [darkMode, setDarkMode] = useState(true);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState(null);
-  const [availableVoices, setAvailableVoices] = useState([]);
-  const [speechRate, setSpeechRate] = useState(1);
-  const utteranceRef = useRef(null);
+  const [showReels, setShowReels] = useState(false);
 
   const [chatSessions, setChatSessions] = useState([
     {
@@ -160,21 +157,28 @@ export default function Home() {
     ));
   };
 
-  // Load voices
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      const loadVoices = () => {
-        const voices = window.speechSynthesis.getVoices();
-        setAvailableVoices(voices);
-        if (voices.length > 0 && !selectedVoice) {
-          setSelectedVoice(voices[0]);
-        }
-      };
-      loadVoices();
-      window.speechSynthesis.onvoiceschanged = loadVoices;
+  // ============================================================
+  // URL HANDLING — Update URL when devotion is selected
+  // ============================================================
+  const updateUrl = (devotionId) => {
+    const url = new URL(window.location);
+    if (devotionId && devotionId !== 'daily') {
+      url.searchParams.set('devotion', devotionId);
+    } else {
+      url.searchParams.delete('devotion');
     }
-  }, []);
+    window.history.replaceState({}, '', url);
+  };
 
+  const selectDevotion = (id) => {
+    setSelectedDevotionId(id);
+    setActiveTab('devotions');
+    updateUrl(id);
+  };
+
+  // ============================================================
+  // LOAD DAILY DEVOTION
+  // ============================================================
   useEffect(() => {
     async function loadDailyDevotion() {
       try {
@@ -182,7 +186,21 @@ export default function Home() {
         const data = await response.json();
         if (data.success) {
           setDailyDevotion(data.devotion);
-          setSelectedDevotionId('daily');
+          // Only set to 'daily' if no other selection exists
+          if (selectedDevotionId === null) {
+            // Check if URL has a devotion param
+            const params = new URLSearchParams(window.location.search);
+            const devotionParam = params.get('devotion');
+            if (devotionParam) {
+              const id = parseInt(devotionParam);
+              const found = devotions.find(d => d.id === id);
+              if (found) {
+                setSelectedDevotionId(id);
+                return;
+              }
+            }
+            setSelectedDevotionId('daily');
+          }
         } else {
           setError(data.error || 'Failed to load devotion');
         }
@@ -195,21 +213,53 @@ export default function Home() {
     loadDailyDevotion();
   }, []);
 
+  // ============================================================
+  // HANDLE SHARED LINK FROM URL
+  // ============================================================
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const devotionParam = params.get('devotion');
+    if (devotionParam) {
+      const id = parseInt(devotionParam);
+      const found = devotions.find(d => d.id === id);
+      if (found) {
+        setSelectedDevotionId(id);
+        setActiveTab('devotions');
+      }
+    }
+  }, [devotions]);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
+  // ============================================================
+  // GET SELECTED DEVOTION
+  // ============================================================
   const getSelectedDevotion = () => {
-    if (selectedDevotionId === 'daily' && dailyDevotion) {
-      return dailyDevotion;
+    // If 'daily' is selected, show daily devotion
+    if (selectedDevotionId === 'daily') {
+      return dailyDevotion || null;
     }
-    const found = devotions.find(d => d.id === selectedDevotionId);
-    if (found) {
-      return found;
+    
+    // If a specific devotion is selected (number), find it
+    if (selectedDevotionId !== null && typeof selectedDevotionId === 'number') {
+      const found = devotions.find(d => d.id === selectedDevotionId);
+      if (found) {
+        return found;
+      }
     }
+    
+    // If nothing is selected but daily exists, show daily
     if (dailyDevotion) {
       return dailyDevotion;
     }
+    
+    // If daily doesn't exist but there are devotions, show the first one
+    if (devotions.length > 0) {
+      return devotions[0];
+    }
+    
     return null;
   };
 
@@ -314,18 +364,19 @@ export default function Home() {
   };
 
   // ============================================================
-  // SHARE FUNCTION
+  // SHARE FUNCTION — Direct Link to Specific Devotion
   // ============================================================
   const handleShare = async (devotion) => {
-    const url = window.location.href;
-    const text = `📖 ${devotion.title}\n\n${devotion.scripture}\n\nRead more at Bible Studier`;
+    const baseUrl = window.location.origin;
+    const shareUrl = `${baseUrl}/?devotion=${devotion.id}`;
+    const text = `📖 ${devotion.title}\n\n${devotion.scripture}\n\nRead the full devotion at Bible Studier`;
 
     if (navigator.share) {
       try {
         await navigator.share({
           title: devotion.title,
           text: text,
-          url: url,
+          url: shareUrl,
         });
       } catch (err) {
         if (err.name !== 'AbortError') {
@@ -334,110 +385,12 @@ export default function Home() {
       }
     } else {
       try {
-        await navigator.clipboard.writeText(`${text}\n\n${url}`);
+        await navigator.clipboard.writeText(`${text}\n\n${shareUrl}`);
         alert('Link copied to clipboard! Share it with your friends.');
       } catch (err) {
         console.error('Copy failed:', err);
-        alert('Failed to copy link. Please copy the URL manually.');
+        prompt('Copy this link to share:', `${text}\n\n${shareUrl}`);
       }
-    }
-  };
-
-  // ============================================================
-  // AUDIO FUNCTIONS
-  // ============================================================
-  const handleSpeak = (devotion) => {
-    if (!devotion) {
-      console.log('No devotion selected');
-      return;
-    }
-
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      alert('Speech synthesis is not supported in this browser.');
-      return;
-    }
-
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-      return;
-    }
-
-    const fullText = `${devotion.title}. ${devotion.scripture}. ${devotion.story}`;
-
-    // Force a short utterance first to "wake up" the speech engine
-    const wakeUtterance = new SpeechSynthesisUtterance(' ');
-    wakeUtterance.volume = 0;
-    wakeUtterance.onend = () => {
-      // Now speak the real text
-      const utterance = new SpeechSynthesisUtterance(fullText);
-      
-      // Get available voices
-      const voices = window.speechSynthesis.getVoices();
-      console.log('Available voices:', voices.map(v => v.name));
-      
-      // Try to find a working voice
-      const preferredVoices = ['Microsoft David Desktop', 'Microsoft Zira Desktop', 'Google UK English Female', 'Samantha'];
-      let selectedVoice = null;
-      
-      for (const voiceName of preferredVoices) {
-        const found = voices.find(v => v.name.includes(voiceName));
-        if (found) {
-          selectedVoice = found;
-          break;
-        }
-      }
-      
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-        console.log('Using voice:', selectedVoice.name);
-      } else if (voices.length > 0) {
-        utterance.voice = voices[0];
-        console.log('Using default voice:', voices[0].name);
-      }
-      
-      utterance.rate = Math.min(speechRate, 1.2);
-      utterance.pitch = 1;
-      utterance.volume = 1;
-
-      utterance.onstart = () => {
-        console.log('Speech started');
-        setIsSpeaking(true);
-      };
-
-      utterance.onend = () => {
-        console.log('Speech ended');
-        setIsSpeaking(false);
-      };
-
-      utterance.onerror = (e) => {
-        console.log('Speech error:', e);
-        setIsSpeaking(false);
-      };
-
-      window.speechSynthesis.speak(utterance);
-    };
-
-    window.speechSynthesis.speak(wakeUtterance);
-  };
-
-  const handleStop = () => {
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
-  };
-
-  const handleVoiceChange = (e) => {
-    const voice = availableVoices.find(v => v.name === e.target.value);
-    setSelectedVoice(voice || null);
-  };
-
-  const handleRateChange = (e) => {
-    setSpeechRate(parseFloat(e.target.value));
-    // If currently speaking, update rate
-    if (window.speechSynthesis.speaking && utteranceRef.current) {
-      utteranceRef.current.rate = parseFloat(e.target.value);
     }
   };
 
@@ -477,19 +430,20 @@ export default function Home() {
         }
 
         /* ============================================================
-           LIGHT THEME
+           LIGHT THEME — Improved Contrast
            ============================================================ */
         .app.light {
-          --bg-primary: #f5f5f7;
-          --bg-secondary: #ffffff;
+          --bg-primary: #e8e8ea;
+          --bg-secondary: #f5f5f7;
           --bg-card: #ffffff;
-          --bg-hover: rgba(0,0,0,0.04);
-          --bg-active: rgba(0,0,0,0.06);
+          --bg-hover: rgba(0,0,0,0.06);
+          --bg-active: rgba(0,0,0,0.08);
           --text-primary: #1a1a24;
-          --text-secondary: #6a6a7e;
-          --text-muted: #9a9aae;
-          --border-color: rgba(0,0,0,0.08);
-          --border-light: rgba(0,0,0,0.15);
+          --text-secondary: #4a4a5e;
+          --text-muted: #8a8a9e;
+          --border-color: rgba(0,0,0,0.15);
+          --border-light: rgba(0,0,0,0.25);
+          --shadow: rgba(0,0,0,0.08);
           --accent-pink: #fd429c;
           --accent-purple: #7f22fe;
           --accent-gradient: linear-gradient(135deg, #fd429c, #7f22fe);
@@ -806,6 +760,10 @@ export default function Home() {
           margin-bottom: 24px;
           transition: background 0.3s ease, border-color 0.3s ease;
         }
+        .app.light .tabs {
+          background: #dddde0;
+          border-color: rgba(0,0,0,0.12);
+        }
         .tab-btn {
           flex: 1;
           padding: 8px 16px;
@@ -1002,45 +960,6 @@ export default function Home() {
           background: rgba(124, 58, 237, 0.2);
         }
 
-        /* Voice controls */
-        .voice-controls {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          align-items: center;
-          margin-top: 8px;
-          padding: 8px 12px;
-          border-radius: var(--radius-sm);
-          background: var(--bg-tertiary);
-          border: 1px solid var(--border-color);
-        }
-        .voice-controls select,
-        .voice-controls input[type="range"] {
-          background: var(--bg-secondary);
-          color: var(--text-primary);
-          border: 1px solid var(--border-color);
-          border-radius: 6px;
-          padding: 4px 8px;
-          font-size: 12px;
-          font-family: var(--font);
-          outline: none;
-        }
-        .voice-controls select:focus,
-        .voice-controls input:focus {
-          border-color: var(--accent-purple);
-        }
-        .voice-controls label {
-          font-size: 12px;
-          color: var(--text-muted);
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-        .voice-controls input[type="range"] {
-          width: 80px;
-          accent-color: var(--accent-purple);
-        }
-
         .download-btn {
           margin-top: 12px;
           padding: 8px 16px;
@@ -1219,24 +1138,28 @@ export default function Home() {
           box-shadow: 0 0 0 3px rgba(253, 66, 156, 0.1);
         }
         .chat-input input::placeholder { color: var(--text-muted); }
-        .chat-input button {
+
+        .send-btn {
           padding: 8px 20px;
           border-radius: var(--radius-full);
-          border: 1px solid var(--border-color);
-          background: transparent;
-          color: var(--text-secondary);
+          border: none;
+          background: #7c3aed;
+          color: #ffffff;
           font-size: 14px;
-          font-weight: 450;
+          font-weight: 500;
           cursor: pointer;
           transition: all 0.2s;
           font-family: var(--font);
+          white-space: nowrap;
         }
-        .chat-input button:hover:not(:disabled) {
-          background: var(--bg-hover);
-          color: var(--text-primary);
-          border-color: var(--border-light);
+        .send-btn:hover:not(:disabled) {
+          background: #6d28d9;
+          box-shadow: 0 2px 12px rgba(124, 58, 237, 0.3);
         }
-        .chat-input button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .send-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
 
         .msg-paragraph { margin: 4px 0; line-height: 1.6; }
         .msg-h2 { font-size: 18px; font-weight: 500; margin: 8px 0 4px; color: var(--text-primary); }
@@ -1329,13 +1252,9 @@ export default function Home() {
             width: 16px;
             height: 16px;
           }
-          .voice-controls {
-            flex-direction: column;
-            align-items: stretch;
-          }
-          .voice-controls select,
-          .voice-controls input[type="range"] {
-            width: 100%;
+          .send-btn {
+            font-size: 12px;
+            padding: 6px 14px;
           }
         }
 
@@ -1408,7 +1327,7 @@ export default function Home() {
               {dailyDevotion && (
                 <div
                   className={`session-item ${selectedDevotionId === 'daily' ? 'active' : ''}`}
-                  onClick={() => setSelectedDevotionId('daily')}
+                  onClick={() => selectDevotion('daily')}
                 >
                   <span className="icon">⭐</span>
                   <div className="session-info">
@@ -1421,7 +1340,7 @@ export default function Home() {
                 <div
                   key={devotion.id}
                   className={`session-item ${selectedDevotionId === devotion.id ? 'active' : ''}`}
-                  onClick={() => setSelectedDevotionId(devotion.id)}
+                  onClick={() => selectDevotion(devotion.id)}
                 >
                   <span className="icon">📖</span>
                   <div className="session-info">
@@ -1466,6 +1385,7 @@ export default function Home() {
           <button
             onClick={() => {
               setActiveTab('devotions');
+              setShowReels(false);
               if (!selectedDevotionId) setSelectedDevotionId('daily');
             }}
             className={`tab-btn ${activeTab === 'devotions' ? 'active' : ''}`}
@@ -1480,10 +1400,14 @@ export default function Home() {
                 <path d="M12 6v14" />
               </svg>
             </span>
-            Devotionals
+            <span className="icon-label">Devotionals</span>
           </button>
+
           <button
-            onClick={() => setActiveTab('chat')}
+            onClick={() => {
+              setActiveTab('chat');
+              setShowReels(false);
+            }}
             className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
           >
             <span className="icon tab-icon">
@@ -1491,7 +1415,26 @@ export default function Home() {
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
             </span>
-            Paul
+            <span className="icon-label">Paul</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setShowReels(true);
+              setActiveTab('reels');
+            }}
+            className={`tab-btn reels-tab ${activeTab === 'reels' ? 'active' : ''}`}
+          >
+            <span className="icon tab-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="2.18" />
+                <line x1="8" y1="2" x2="8" y2="22" />
+                <line x1="16" y1="2" x2="16" y2="22" />
+                <line x1="2" y1="8" x2="22" y2="8" />
+                <line x1="2" y1="16" x2="22" y2="16" />
+              </svg>
+            </span>
+            <span className="icon-label">Reels</span>
           </button>
         </div>
 
@@ -1520,9 +1463,7 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* ============================================================
-                    ACTION BUTTONS — Download PDF, Share, Audio
-                    ============================================================ */}
+                {/* ACTION BUTTONS — PDF & Share */}
                 <div className="action-buttons">
                   {/* Download PDF */}
                   <button
@@ -1550,66 +1491,7 @@ export default function Home() {
                     </svg>
                     Share
                   </button>
-
-                  {/* Audio — Play/Stop */}
-                  <button
-                    onClick={() => {
-                      if (isSpeaking) {
-                        handleStop();
-                      } else {
-                        handleSpeak(selectedDevotion);
-                      }
-                    }}
-                    className={`action-btn ${isSpeaking ? 'active' : ''}`}
-                  >
-                    {isSpeaking ? (
-                      <>
-                        <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="6" y="4" width="4" height="16" />
-                          <rect x="14" y="4" width="4" height="16" />
-                        </svg>
-                        Stop
-                      </>
-                    ) : (
-                      <>
-                        <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polygon points="5 3 19 12 5 21 5 3" />
-                        </svg>
-                        Listen
-                      </>
-                    )}
-                  </button>
                 </div>
-
-                {/* Voice Controls — only show when audio is active */}
-                {isSpeaking && (
-                  <div className="voice-controls">
-                    <label>
-                      Voice:
-                      <select value={selectedVoice?.name || ''} onChange={handleVoiceChange}>
-                        {availableVoices.map((voice) => (
-                          <option key={voice.name} value={voice.name}>
-                            {voice.name} ({voice.lang})
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Speed:
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="2"
-                        step="0.1"
-                        value={speechRate}
-                        onChange={handleRateChange}
-                      />
-                      <span style={{ minWidth: '30px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {speechRate}x
-                      </span>
-                    </label>
-                  </div>
-                )}
               </div>
             ) : (
               <div className="loading">No devotion selected.</div>
@@ -1622,7 +1504,6 @@ export default function Home() {
           <div className="chat-container">
             <div className="chat-messages">
               {messages.length === 0 ? (
-                /* Welcome Screen */
                 <div className="welcome-screen">
                   <div className="welcome-icon">📖</div>
                   <h1 className="welcome-title">Ask Paul anything</h1>
@@ -1631,7 +1512,6 @@ export default function Home() {
                   </p>
                 </div>
               ) : (
-                /* Messages */
                 <>
                   {messages.map((message, index) => (
                     <div key={index} className={`chat-message ${message.isUser ? 'user' : 'assistant'}`}>
@@ -1672,9 +1552,19 @@ export default function Home() {
               }
             }}>
               <input name="message" type="text" placeholder="Ask a Bible question..." disabled={isLoading} autoComplete="off" />
-              <button type="submit" disabled={isLoading}>{isLoading ? '...' : 'Send →'}</button>
+              <button type="submit" disabled={isLoading} className="send-btn">
+                {isLoading ? '...' : 'Send →'}
+              </button>
             </form>
           </div>
+        )}
+
+        {/* Reels Fullscreen Modal */}
+        {showReels && (
+          <ReelsFeed onClose={() => {
+            setShowReels(false);
+            setActiveTab('devotions');
+          }} />
         )}
       </main>
     </div>
