@@ -13,7 +13,34 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: "Bible Studier",
-  description: "Daily Devotionals & Bible Study Assistant",
+  description: "Daily Devotionals, Bible Study Assistant & Message Reels",
+  openGraph: {
+    title: "Bible Studier",
+    description: "Daily Devotionals, Bible Study Assistant & Message Reels",
+    url: "/",
+    siteName: "Bible Studier",
+    images: [
+      {
+        url: "/bible.png",
+        width: 722,
+        height: 722,
+        alt: "Bible Studier - Daily Devotionals",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Bible Studier",
+    description: "Daily Devotionals, Bible Study Assistant & Message Reels",
+    images: ["/bible.png"],
+  },
+  icons: {
+    icon: "/bible.png",
+    shortcut: "/bible.png",
+    apple: "/bible.png",
+  },
 };
 
 export default function RootLayout({ children }) {
@@ -25,18 +52,6 @@ export default function RootLayout({ children }) {
     >
       <body className="min-h-full flex flex-col" style={{ background: '#101012' }}>
         {children}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                var el = document.getElementById('__next');
-                if (el) {
-                  el.classList.add('loaded');
-                }
-              })();
-            `,
-          }}
-        />
       </body>
     </html>
   );

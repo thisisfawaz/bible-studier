@@ -1530,7 +1530,7 @@ export default function Home() {
                 <line x1="2" y1="16" x2="22" y2="16" />
               </svg>
             </span>
-            <span className="icon-label">Reels</span>
+            <span className="icon-label">Message Reels</span>
           </button>
         </div>
 

@@ -12,6 +12,7 @@ export default function ReelsFeed({ onClose }) {
   const touchStartY = useRef(0);
   const touchEndY = useRef(0);
   const isTransitioning = useRef(false);
+  const [isPreloaded, setIsPreloaded] = useState(false);
 
   useEffect(() => {
     async function loadVideos() {
@@ -21,6 +22,8 @@ export default function ReelsFeed({ onClose }) {
         
         if (data.success && data.videos.length > 0) {
           setVideos(data.videos);
+          // Start preloading after videos are set
+          setTimeout(() => setIsPreloaded(true), 100);
         } else {
           setError('No videos found');
         }
@@ -33,6 +36,54 @@ export default function ReelsFeed({ onClose }) {
     
     loadVideos();
   }, []);
+
+  // Pause all videos except the active one
+  const pauseAllVideos = (exceptVideoId) => {
+    Object.keys(videoRefs.current).forEach((videoId) => {
+      if (videoId !== exceptVideoId) {
+        const iframe = videoRefs.current[videoId];
+        if (iframe) {
+          iframe.contentWindow?.postMessage(
+            '{"event":"command","func":"pauseVideo","args":""}',
+            '*'
+          );
+        }
+      }
+    });
+  };
+
+  // Preload all videos when loaded
+  useEffect(() => {
+    if (videos.length > 0 && isPreloaded) {
+      // Preload all videos
+      videos.forEach((video) => {
+        const iframe = videoRefs.current[video.id];
+        if (iframe) {
+          // Set source to preload
+          iframe.src = `https://www.youtube.com/embed/${video.id}?autoplay=0&rel=0&controls=0&loop=1&playlist=${video.id}&enablejsapi=1`;
+        }
+      });
+      
+      // Play first video after a short delay
+      setTimeout(() => {
+        const firstVideo = videos[0];
+        pauseAllVideos(null);
+        const firstIframe = videoRefs.current[firstVideo?.id];
+        if (firstIframe) {
+          firstIframe.contentWindow?.postMessage(
+            '{"event":"command","func":"seekTo","args":[0, true]}',
+            '*'
+          );
+          setTimeout(() => {
+            firstIframe.contentWindow?.postMessage(
+              '{"event":"command","func":"playVideo","args":""}',
+              '*'
+            );
+          }, 200);
+        }
+      }, 500);
+    }
+  }, [videos, isPreloaded]);
 
   // Touch handlers for swipe detection
   useEffect(() => {
@@ -108,28 +159,12 @@ export default function ReelsFeed({ onClose }) {
     };
   }, [videos.length, currentIndex]);
 
-  // Pause all videos except the active one
-  const pauseAllVideos = (exceptVideoId) => {
-    Object.keys(videoRefs.current).forEach((videoId) => {
-      if (videoId !== exceptVideoId) {
-        const iframe = videoRefs.current[videoId];
-        if (iframe) {
-          iframe.contentWindow?.postMessage(
-            '{"event":"command","func":"pauseVideo","args":""}',
-            '*'
-          );
-        }
-      }
-    });
-  };
-
   const goToNext = () => {
     if (currentIndex < videos.length - 1 && !isTransitioning.current) {
       isTransitioning.current = true;
       const newIndex = currentIndex + 1;
       setCurrentIndex(newIndex);
       
-      // Pause all videos except the current one
       pauseAllVideos(videos[newIndex]?.id);
       
       const container = containerRef.current;
@@ -146,6 +181,7 @@ export default function ReelsFeed({ onClose }) {
       setTimeout(() => {
         const nextVideo = videos[newIndex];
         if (nextVideo && videoRefs.current[nextVideo.id]) {
+          // Video is already preloaded, just play it immediately
           videoRefs.current[nextVideo.id]?.contentWindow?.postMessage(
             '{"event":"command","func":"seekTo","args":[0, true]}',
             '*'
@@ -155,10 +191,10 @@ export default function ReelsFeed({ onClose }) {
               '{"event":"command","func":"playVideo","args":""}',
               '*'
             );
-          }, 100);
+          }, 50);
         }
         isTransitioning.current = false;
-      }, 300);
+      }, 200);
     }
   };
 
@@ -168,7 +204,6 @@ export default function ReelsFeed({ onClose }) {
       const newIndex = currentIndex - 1;
       setCurrentIndex(newIndex);
       
-      // Pause all videos except the current one
       pauseAllVideos(videos[newIndex]?.id);
       
       const container = containerRef.current;
@@ -194,43 +229,15 @@ export default function ReelsFeed({ onClose }) {
               '{"event":"command","func":"playVideo","args":""}',
               '*'
             );
-          }, 100);
+          }, 50);
         }
         isTransitioning.current = false;
-      }, 300);
+      }, 200);
     }
   };
 
-  // Play first video when loaded and pause others
-  useEffect(() => {
-    if (videos.length > 0) {
-      const firstVideo = videos[0];
-      // Pause all videos initially
-      setTimeout(() => {
-        pauseAllVideos(null);
-      }, 100);
-      
-      const firstIframe = videoRefs.current[firstVideo?.id];
-      if (firstIframe) {
-        setTimeout(() => {
-          firstIframe.contentWindow?.postMessage(
-            '{"event":"command","func":"seekTo","args":[0, true]}',
-            '*'
-          );
-          setTimeout(() => {
-            firstIframe.contentWindow?.postMessage(
-              '{"event":"command","func":"playVideo","args":""}',
-              '*'
-            );
-          }, 100);
-        }, 600);
-      }
-    }
-  }, [videos]);
-
   // Handle iframe load
   const handleIframeLoad = (videoId) => {
-    // Pause all other videos when one loads
     pauseAllVideos(videoId);
   };
 
@@ -256,10 +263,7 @@ export default function ReelsFeed({ onClose }) {
 
   return (
     <div className="reels-fullscreen">
-      {/* Close button - top left */}
-      <button className="reels-close-btn" onClick={onClose}>
-        ✕
-      </button>
+      <button className="reels-close-btn" onClick={onClose}>✕</button>
 
       <div className="reels-feed-container" ref={containerRef}>
         {videos.map((video) => (
@@ -269,12 +273,14 @@ export default function ReelsFeed({ onClose }) {
             data-video-id={video.id}
           >
             <div className="reels-feed-video-wrapper">
+              {/* Preload the iframe with autoplay=0 so it loads in background */}
               <iframe
                 ref={(el) => {
                   if (el) {
                     videoRefs.current[video.id] = el;
                   }
                 }}
+                // Load immediately but don't autoplay
                 src={`https://www.youtube.com/embed/${video.id}?autoplay=0&rel=0&controls=0&loop=1&playlist=${video.id}&enablejsapi=1`}
                 title={video.title}
                 frameBorder="0"
@@ -282,9 +288,9 @@ export default function ReelsFeed({ onClose }) {
                 allowFullScreen
                 className="reels-feed-video"
                 onLoad={() => handleIframeLoad(video.id)}
+                loading="eager"
               />
             </div>
-            {/* Overlay Info */}
             <div className="reels-feed-overlay">
               <div className="reels-feed-info">
                 <h3 className="reels-feed-title">{video.title}</h3>
