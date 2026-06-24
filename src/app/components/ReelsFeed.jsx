@@ -1,331 +1,318 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-
-// Load the YouTube IFrame API
-const loadYouTubeAPI = () => {
-  return new Promise((resolve) => {
-    if (window.YT && window.YT.Player) {
-      resolve(window.YT);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://www.youtube.com/iframe_api';
-    script.onload = () => {
-      // Wait for YT to be ready
-      const checkReady = () => {
-        if (window.YT && window.YT.Player) {
-          resolve(window.YT);
-        } else {
-          setTimeout(checkReady, 100);
-        }
-      };
-      checkReady();
-    };
-    document.body.appendChild(script);
-  });
-};
+import { useState, useEffect, useRef } from 'react';
 
 export default function ReelsFeed({ onClose }) {
-  const [videos, setVideos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isPlayerReady, setIsPlayerReady] = useState(false);
-  
-  const containerRef = useRef(null);
-  const playerRef = useRef(null);
-  const playerContainerRef = useRef(null);
-  const touchStartY = useRef(0);
-  const touchEndY = useRef(0);
-  const isTransitioning = useRef(false);
-  const apiRef = useRef(null);
+    const [videos, setVideos] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const containerRef = useRef(null);
+    const videoRefs = useRef({});
+    const touchStartY = useRef(0);
+    const touchEndY = useRef(0);
+    const isTransitioning = useRef(false);
+    const [isPreloaded, setIsPreloaded] = useState(false);
 
-  // Load videos and initialize player
-  useEffect(() => {
-    async function loadVideos() {
-      try {
-        const response = await fetch('/api/reels');
-        const data = await response.json();
-        
-        if (data.success && data.videos.length > 0) {
-          setVideos(data.videos);
-          // Initialize player after videos are loaded
-          await initPlayer(data.videos[0].id);
-        } else {
-          setError('No videos found');
-        }
-      } catch (err) {
-        setError(err.message || 'Failed to load videos');
-      } finally {
-        setLoading(false);
-      }
-    }
-    
-    loadVideos();
-  }, []);
+    useEffect(() => {
+        async function loadVideos() {
+            try {
+                const response = await fetch('/api/reels');
+                const data = await response.json();
 
-  // Initialize YouTube Player
-  const initPlayer = useCallback(async (videoId) => {
-    try {
-      const YT = await loadYouTubeAPI();
-      apiRef.current = YT;
-      
-      if (playerRef.current) {
-        playerRef.current.destroy();
-      }
-
-      playerRef.current = new YT.Player(playerContainerRef.current, {
-        height: '100%',
-        width: '100%',
-        videoId: videoId,
-        playerVars: {
-          autoplay: 1,
-          rel: 0,
-          controls: 0,
-          loop: 1,
-          playlist: videoId,
-          mute: 0,
-          modestbranding: 1,
-        },
-        events: {
-          onReady: () => {
-            setIsPlayerReady(true);
-            setIsPlaying(true);
-          },
-          onStateChange: (event) => {
-            if (event.data === YT.PlayerState.PLAYING) {
-              setIsPlaying(true);
-            } else if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED) {
-              setIsPlaying(false);
+                if (data.success && data.videos.length > 0) {
+                    setVideos(data.videos);
+                    // Start preloading after videos are set
+                    setTimeout(() => setIsPreloaded(true), 100);
+                } else {
+                    setError('No videos found');
+                }
+            } catch (err) {
+                setError(err.message || 'Failed to load videos');
+            } finally {
+                setLoading(false);
             }
-          },
-          onError: (error) => {
-            console.error('YouTube Player Error:', error);
-          }
         }
-      });
-    } catch (err) {
-      console.error('Failed to initialize YouTube player:', err);
-    }
-  }, []);
 
-  // Change video
-  const changeVideo = useCallback((videoId) => {
-    if (playerRef.current && isPlayerReady) {
-      playerRef.current.loadVideoById({
-        videoId: videoId,
-        startSeconds: 0,
-      });
-      setIsPlaying(true);
-    }
-  }, [isPlayerReady]);
+        loadVideos();
+    }, []);
 
-  // Touch handlers for swipe detection
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleTouchStart = (e) => {
-      touchStartY.current = e.touches[0].clientY;
+    // Pause all videos except the active one
+    const pauseAllVideos = (exceptVideoId) => {
+        Object.keys(videoRefs.current).forEach((videoId) => {
+            if (videoId !== exceptVideoId) {
+                const iframe = videoRefs.current[videoId];
+                if (iframe) {
+                    iframe.contentWindow?.postMessage(
+                        '{"event":"command","func":"pauseVideo","args":""}',
+                        '*'
+                    );
+                }
+            }
+        });
     };
 
-    const handleTouchMove = (e) => {
-      e.preventDefault();
-    };
+    // Preload all videos when loaded
+    useEffect(() => {
+        if (videos.length > 0 && isPreloaded) {
+            // Preload all videos
+            videos.forEach((video) => {
+                const iframe = videoRefs.current[video.id];
+                if (iframe) {
+                    // Set source to preload
+                    iframe.src = `https://www.youtube.com/embed/${video.id}?autoplay=0&rel=0&controls=0&loop=1&playlist=${video.id}&enablejsapi=1`;
+                }
+            });
 
-    const handleTouchEnd = (e) => {
-      if (isTransitioning.current) return;
-      
-      touchEndY.current = e.changedTouches[0].clientY;
-      const diff = touchStartY.current - touchEndY.current;
-      
-      if (Math.abs(diff) < 30) return;
-      
-      if (diff > 0) {
-        goToNext();
-      } else {
-        goToPrevious();
-      }
-    };
-
-    container.addEventListener('touchstart', handleTouchStart, { passive: true });
-    container.addEventListener('touchmove', handleTouchMove, { passive: false });
-    container.addEventListener('touchend', handleTouchEnd, { passive: true });
-
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart);
-      container.removeEventListener('touchmove', handleTouchMove);
-      container.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, [videos.length, currentIndex]);
-
-  // Wheel handler for desktop
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    let wheelTimeout = null;
-
-    const handleWheel = (e) => {
-      if (isTransitioning.current) return;
-      
-      e.preventDefault();
-      
-      if (wheelTimeout) return;
-      
-      wheelTimeout = setTimeout(() => {
-        wheelTimeout = null;
-      }, 800);
-
-      if (e.deltaY > 0) {
-        goToNext();
-      } else if (e.deltaY < 0) {
-        goToPrevious();
-      }
-    };
-
-    container.addEventListener('wheel', handleWheel, { passive: false });
-
-    return () => {
-      container.removeEventListener('wheel', handleWheel);
-      if (wheelTimeout) {
-        clearTimeout(wheelTimeout);
-      }
-    };
-  }, [videos.length, currentIndex]);
-
-  const goToNext = () => {
-    if (currentIndex < videos.length - 1 && !isTransitioning.current) {
-      isTransitioning.current = true;
-      const newIndex = currentIndex + 1;
-      setCurrentIndex(newIndex);
-      
-      const container = containerRef.current;
-      if (container) {
-        const children = container.children;
-        if (children[newIndex]) {
-          container.scrollTo({
-            top: children[newIndex].offsetTop,
-            behavior: 'auto'
-          });
+            // Play first video after a short delay
+            setTimeout(() => {
+                const firstVideo = videos[0];
+                pauseAllVideos(null);
+                const firstIframe = videoRefs.current[firstVideo?.id];
+                if (firstIframe) {
+                    firstIframe.contentWindow?.postMessage(
+                        '{"event":"command","func":"seekTo","args":[0, true]}',
+                        '*'
+                    );
+                    setTimeout(() => {
+                        firstIframe.contentWindow?.postMessage(
+                            '{"event":"command","func":"playVideo","args":""}',
+                            '*'
+                        );
+                    }, 200);
+                }
+            }, 100);
         }
-      }
-      
-      // Change video after scroll
-      setTimeout(() => {
-        changeVideo(videos[newIndex].id);
-        isTransitioning.current = false;
-      }, 200);
-    }
-  };
+    }, [videos, isPreloaded]);
 
-  const goToPrevious = () => {
-    if (currentIndex > 0 && !isTransitioning.current) {
-      isTransitioning.current = true;
-      const newIndex = currentIndex - 1;
-      setCurrentIndex(newIndex);
-      
-      const container = containerRef.current;
-      if (container) {
-        const children = container.children;
-        if (children[newIndex]) {
-          container.scrollTo({
-            top: children[newIndex].offsetTop,
-            behavior: 'auto'
-          });
+    // Touch handlers for swipe detection
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const handleTouchStart = (e) => {
+            touchStartY.current = e.touches[0].clientY;
+        };
+
+        const handleTouchMove = (e) => {
+            e.preventDefault();
+        };
+
+        const handleTouchEnd = (e) => {
+            if (isTransitioning.current) return;
+
+            touchEndY.current = e.changedTouches[0].clientY;
+            const diff = touchStartY.current - touchEndY.current;
+
+            if (Math.abs(diff) < 30) return;
+
+            if (diff > 0) {
+                goToNext();
+            } else {
+                goToPrevious();
+            }
+        };
+
+        container.addEventListener('touchstart', handleTouchStart, { passive: true });
+        container.addEventListener('touchmove', handleTouchMove, { passive: false });
+        container.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+        return () => {
+            container.removeEventListener('touchstart', handleTouchStart);
+            container.removeEventListener('touchmove', handleTouchMove);
+            container.removeEventListener('touchend', handleTouchEnd);
+        };
+    }, [videos.length, currentIndex]);
+
+    // Wheel handler for desktop
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        let wheelTimeout = null;
+
+        const handleWheel = (e) => {
+            if (isTransitioning.current) return;
+
+            e.preventDefault();
+
+            if (wheelTimeout) return;
+
+            wheelTimeout = setTimeout(() => {
+                wheelTimeout = null;
+            }, 800);
+
+            if (e.deltaY > 0) {
+                goToNext();
+            } else if (e.deltaY < 0) {
+                goToPrevious();
+            }
+        };
+
+        container.addEventListener('wheel', handleWheel, { passive: false });
+
+        return () => {
+            container.removeEventListener('wheel', handleWheel);
+            if (wheelTimeout) {
+                clearTimeout(wheelTimeout);
+            }
+        };
+    }, [videos.length, currentIndex]);
+
+    const goToNext = () => {
+        if (currentIndex < videos.length - 1 && !isTransitioning.current) {
+            isTransitioning.current = true;
+            const newIndex = currentIndex + 1;
+            setCurrentIndex(newIndex);
+
+            pauseAllVideos(videos[newIndex]?.id);
+
+            const container = containerRef.current;
+            if (container) {
+                const children = container.children;
+                if (children[newIndex]) {
+                    container.scrollTo({
+                        top: children[newIndex].offsetTop,
+                        behavior: 'auto'
+                    });
+                }
+            }
+
+            setTimeout(() => {
+                const nextVideo = videos[newIndex];
+                if (nextVideo && videoRefs.current[nextVideo.id]) {
+                    // Video is already preloaded, just play it immediately
+                    videoRefs.current[nextVideo.id]?.contentWindow?.postMessage(
+                        '{"event":"command","func":"seekTo","args":[0, true]}',
+                        '*'
+                    );
+                    setTimeout(() => {
+                        videoRefs.current[nextVideo.id]?.contentWindow?.postMessage(
+                            '{"event":"command","func":"playVideo","args":""}',
+                            '*'
+                        );
+                    }, 50);
+                }
+                isTransitioning.current = false;
+            }, 200);
         }
-      }
-      
-      setTimeout(() => {
-        changeVideo(videos[newIndex].id);
-        isTransitioning.current = false;
-      }, 200);
-    }
-  };
-
-  // Cleanup player on unmount
-  useEffect(() => {
-    return () => {
-      if (playerRef.current) {
-        playerRef.current.destroy();
-      }
     };
-  }, []);
 
-  if (loading) {
-    return (
-      <div className="reels-fullscreen loading">
-        <div className="loading-spinner"></div>
-        <p>Loading reels...</p>
-      </div>
-    );
-  }
+    const goToPrevious = () => {
+        if (currentIndex > 0 && !isTransitioning.current) {
+            isTransitioning.current = true;
+            const newIndex = currentIndex - 1;
+            setCurrentIndex(newIndex);
 
-  if (error || videos.length === 0) {
-    return (
-      <div className="reels-fullscreen empty">
-        <div className="reels-empty-icon">🎬</div>
-        <h3>No Reels Available</h3>
-        <p>Check back later for new content!</p>
-        <button onClick={onClose} className="reels-close-btn-bottom">Close</button>
-      </div>
-    );
-  }
+            pauseAllVideos(videos[newIndex]?.id);
 
-  return (
-    <div className="reels-fullscreen">
-      {/* Close button */}
-      <button className="reels-close-btn" onClick={onClose}>✕</button>
+            const container = containerRef.current;
+            if (container) {
+                const children = container.children;
+                if (children[newIndex]) {
+                    container.scrollTo({
+                        top: children[newIndex].offsetTop,
+                        behavior: 'auto'
+                    });
+                }
+            }
 
-      <div className="reels-feed-container" ref={containerRef}>
-        {videos.map((video, index) => (
-          <div 
-            key={video.id} 
-            className="reels-feed-item" 
-            data-video-id={video.id}
-            data-index={index}
-          >
-            <div className="reels-feed-video-wrapper">
-              {/* Player container - only the active one gets the player */}
-              {index === currentIndex ? (
-                <div 
-                  ref={playerContainerRef} 
-                  className="reels-feed-player"
-                />
-              ) : (
-                <div 
-                  className="reels-feed-player-placeholder"
-                  style={{ 
-                    background: '#000',
-                    width: '100%',
-                    height: '100%',
-                    maxWidth: '400px',
-                    aspectRatio: '9/16',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: '14px' }}>
-                    {video.title.substring(0, 30)}...
-                  </span>
-                </div>
-              )}
+            setTimeout(() => {
+                const prevVideo = videos[newIndex];
+                if (prevVideo && videoRefs.current[prevVideo.id]) {
+                    videoRefs.current[prevVideo.id]?.contentWindow?.postMessage(
+                        '{"event":"command","func":"seekTo","args":[0, true]}',
+                        '*'
+                    );
+                    setTimeout(() => {
+                        videoRefs.current[prevVideo.id]?.contentWindow?.postMessage(
+                            '{"event":"command","func":"playVideo","args":""}',
+                            '*'
+                        );
+                    }, 50);
+                }
+                isTransitioning.current = false;
+            }, 200);
+        }
+    };
+
+    // Handle iframe load
+    const handleIframeLoad = (videoId) => {
+        pauseAllVideos(videoId);
+    };
+
+    if (loading) {
+        return (
+            <div className="reels-fullscreen loading">
+                <div className="loading-spinner"></div>
+                <p>Loading reels...</p>
             </div>
-            {/* Overlay Info */}
-            <div className="reels-feed-overlay">
-              <div className="reels-feed-info">
-                <h3 className="reels-feed-title">{video.title}</h3>
-                <p className="reels-feed-channel">{video.channelTitle}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+        );
+    }
 
-      <style jsx>{`
+    if (error || videos.length === 0) {
+        return (
+            <div className="reels-fullscreen empty">
+                <div className="reels-empty-icon">🎬</div>
+                <h3>No Reels Available</h3>
+                <p>Check back later for new content!</p>
+                <button onClick={onClose} className="reels-close-btn-bottom">Close</button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="reels-fullscreen">
+            <button className="reels-close-btn" onClick={onClose}>✕</button>
+
+            <div className="reels-feed-container" ref={containerRef}>
+                {videos.map((video) => (
+                    <div
+                        key={video.id}
+                        className="reels-feed-item"
+                        data-video-id={video.id}
+                    >
+                        <div className="reels-feed-video-wrapper">
+                            {/* Preload the iframe with autoplay=0 so it loads in background */}
+                            <iframe
+                                ref={(el) => {
+                                    if (el) {
+                                        videoRefs.current[video.id] = el;
+                                    }
+                                }}
+                                src={`https://www.youtube.com/embed/${video.id}?autoplay=1&rel=0&controls=0&loop=1&playlist=${video.id}&enablejsapi=1`}
+                                title={video.title}
+                                frameBorder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                                className="reels-feed-video"
+                                onLoad={() => {
+                                    // Play the video as soon as it loads
+                                    const iframe = videoRefs.current[video.id];
+                                    if (iframe) {
+                                        setTimeout(() => {
+                                            iframe.contentWindow?.postMessage(
+                                                '{"event":"command","func":"playVideo","args":""}',
+                                                '*'
+                                            );
+                                        }, 50);
+                                    }
+                                    handleIframeLoad(video.id);
+                                }}
+                                loading="eager"
+                            />
+                        </div>
+                        <div className="reels-feed-overlay">
+                            <div className="reels-feed-info">
+                                <h3 className="reels-feed-title">{video.title}</h3>
+                                <p className="reels-feed-channel">{video.channelTitle}</p>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            <style jsx>{`
         .reels-fullscreen {
           position: fixed;
           inset: 0;
@@ -431,18 +418,13 @@ export default function ReelsFeed({ onClose }) {
           background: #000;
         }
 
-        .reels-feed-player {
+        .reels-feed-video {
           width: 100%;
           height: 100%;
           max-width: 400px;
           aspect-ratio: 9 / 16;
           background: #000;
-        }
-
-        .reels-feed-player-placeholder {
-          max-width: 400px;
-          aspect-ratio: 9 / 16;
-          background: #000;
+          pointer-events: none;
         }
 
         .reels-feed-overlay {
@@ -494,10 +476,7 @@ export default function ReelsFeed({ onClose }) {
         }
 
         @media (max-width: 768px) {
-          .reels-feed-player {
-            max-width: 100%;
-          }
-          .reels-feed-player-placeholder {
+          .reels-feed-video {
             max-width: 100%;
           }
           .reels-close-btn {
@@ -516,14 +495,11 @@ export default function ReelsFeed({ onClose }) {
         }
 
         @media (max-width: 480px) {
-          .reels-feed-player {
-            max-width: 100%;
-          }
-          .reels-feed-player-placeholder {
+          .reels-feed-video {
             max-width: 100%;
           }
         }
       `}</style>
-    </div>
-  );
+        </div>
+    );
 }
