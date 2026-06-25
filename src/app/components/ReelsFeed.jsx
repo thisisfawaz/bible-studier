@@ -9,7 +9,6 @@ const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 // Default videos (fallback if cache is empty)
 const DEFAULT_VIDEOS = [
   // Add your video IDs here as fallback
-  // Example: { id: 'VIDEO_ID', title: 'Video Title', channelTitle: 'Channel' }
 ];
 
 export default function ReelsFeed({ onClose }) {
@@ -24,6 +23,7 @@ export default function ReelsFeed({ onClose }) {
     const isTransitioning = useRef(false);
     const [apiReady, setApiReady] = useState(false);
     const [isInitialLoad, setIsInitialLoad] = useState(true);
+    const [isPaused, setIsPaused] = useState(false);
 
     // Load videos from cache or fetch
     useEffect(() => {
@@ -32,41 +32,34 @@ export default function ReelsFeed({ onClose }) {
         if (window.YT && window.YT.Player) {
             setApiReady(true);
         } else {
-            // Wait for preloaded API
             const checkAPI = setInterval(() => {
                 if (window.YT && window.YT.Player) {
                     setApiReady(true);
                     clearInterval(checkAPI);
                 }
             }, 100);
-            // Timeout after 5 seconds
             setTimeout(() => clearInterval(checkAPI), 5000);
         }
     }, []);
 
     const loadVideos = async () => {
         try {
-            // 1. Check localStorage cache
             const cached = localStorage.getItem(VIDEO_CACHE_KEY);
             
             if (cached) {
                 const { videos: cachedVideos, timestamp } = JSON.parse(cached);
                 const age = Date.now() - timestamp;
                 
-                // Use cache if it's not too old
                 if (cachedVideos && cachedVideos.length > 0 && age < CACHE_DURATION) {
                     console.log('📦 Loading videos from cache...');
                     setVideos(cachedVideos);
                     setLoading(false);
                     setIsInitialLoad(false);
-                    
-                    // Still check for updates in background (silent)
                     fetchVideosInBackground();
                     return;
                 }
             }
 
-            // 2. No valid cache - fetch from API
             await fetchAndCacheVideos();
         } catch (err) {
             console.error('Error loading videos:', err);
@@ -81,7 +74,6 @@ export default function ReelsFeed({ onClose }) {
             const data = await response.json();
 
             if (data.success && data.videos.length > 0) {
-                // Cache the videos
                 localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({
                     videos: data.videos,
                     timestamp: Date.now()
@@ -105,7 +97,6 @@ export default function ReelsFeed({ onClose }) {
         }
     };
 
-    // Silent background fetch to update cache
     const fetchVideosInBackground = async () => {
         try {
             const response = await fetch('/api/reels');
@@ -129,10 +120,28 @@ export default function ReelsFeed({ onClose }) {
         }
     };
 
+    // Toggle play/pause for current video
+    const togglePlayPause = () => {
+        const currentVideo = videos[currentIndex];
+        if (!currentVideo || !playersRef.current[currentVideo.id]) return;
+
+        const player = playersRef.current[currentVideo.id];
+        try {
+            if (isPaused) {
+                player.playVideo();
+                setIsPaused(false);
+            } else {
+                player.pauseVideo();
+                setIsPaused(true);
+            }
+        } catch (err) {
+            console.error('Error toggling play/pause:', err);
+        }
+    };
+
     // Initialize players when API is ready
     useEffect(() => {
         if (apiReady && videos.length > 0 && !isInitialLoad) {
-            // Preload thumbnails
             videos.forEach(video => {
                 const img = new Image();
                 img.src = `https://img.youtube.com/vi/${video.id}/hqdefault.jpg`;
@@ -170,12 +179,20 @@ export default function ReelsFeed({ onClose }) {
                             onReady: (event) => {
                                 if (index === 0) {
                                     event.target.playVideo();
+                                    setIsPaused(false);
                                 }
                             },
                             onStateChange: (event) => {
                                 if (event.data === window.YT.PlayerState.ENDED) {
                                     event.target.seekTo(0);
                                     event.target.playVideo();
+                                    setIsPaused(false);
+                                }
+                                if (event.data === window.YT.PlayerState.PAUSED) {
+                                    setIsPaused(true);
+                                }
+                                if (event.data === window.YT.PlayerState.PLAYING) {
+                                    setIsPaused(false);
                                 }
                             }
                         }
@@ -188,13 +205,14 @@ export default function ReelsFeed({ onClose }) {
         });
     };
 
-    // Safe play function - starts from beginning
+    // Safe play function
     const safePlayVideo = (videoId) => {
         try {
             const player = playersRef.current[videoId];
             if (player && typeof player.playVideo === 'function') {
                 player.seekTo(0);
                 player.playVideo();
+                setIsPaused(false);
             }
         } catch (err) {
             console.error('Error playing video:', err);
@@ -206,6 +224,7 @@ export default function ReelsFeed({ onClose }) {
             const player = playersRef.current[videoId];
             if (player && typeof player.pauseVideo === 'function') {
                 player.pauseVideo();
+                setIsPaused(true);
             }
         } catch (err) {
             console.error('Error pausing video:', err);
@@ -223,13 +242,19 @@ export default function ReelsFeed({ onClose }) {
         }
     };
 
-    // Touch handlers
+    // Touch handlers with tap detection
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
 
+        let tapTimeout = null;
+        let touchStartX = 0;
+        let touchStartYPos = 0;
+
         const handleTouchStart = (e) => {
             touchStartY.current = e.touches[0].clientY;
+            touchStartX = e.touches[0].clientX;
+            touchStartYPos = e.touches[0].clientY;
         };
 
         const handleTouchMove = (e) => {
@@ -239,12 +264,22 @@ export default function ReelsFeed({ onClose }) {
         const handleTouchEnd = (e) => {
             if (isTransitioning.current) return;
 
-            touchEndY.current = e.changedTouches[0].clientY;
-            const diff = touchStartY.current - touchEndY.current;
+            const touchEndY = e.changedTouches[0].clientY;
+            const touchEndX = e.changedTouches[0].clientX;
+            const diffY = touchStartY.current - touchEndY;
+            const diffX = touchStartX - touchEndX;
 
-            if (Math.abs(diff) < 30) return;
+            // Check if it's a tap (small movement) vs swipe
+            if (Math.abs(diffY) < 15 && Math.abs(diffX) < 15) {
+                // It's a tap - toggle play/pause
+                togglePlayPause();
+                return;
+            }
 
-            if (diff > 0) {
+            // It's a swipe
+            if (Math.abs(diffY) < 30) return;
+
+            if (diffY > 0) {
                 goToNext();
             } else {
                 goToPrevious();
@@ -259,8 +294,18 @@ export default function ReelsFeed({ onClose }) {
             container.removeEventListener('touchstart', handleTouchStart);
             container.removeEventListener('touchmove', handleTouchMove);
             container.removeEventListener('touchend', handleTouchEnd);
+            if (tapTimeout) clearTimeout(tapTimeout);
         };
-    }, [videos.length, currentIndex]);
+    }, [videos.length, currentIndex, isPaused]);
+
+    // Click handler for desktop
+    const handleVideoClick = (e) => {
+        // Prevent click from triggering on overlay buttons
+        if (e.target.closest('.reels-feed-overlay') || e.target.closest('.reels-close-btn')) {
+            return;
+        }
+        togglePlayPause();
+    };
 
     // Wheel handler
     useEffect(() => {
@@ -308,6 +353,7 @@ export default function ReelsFeed({ onClose }) {
             }
 
             setCurrentIndex(newIndex);
+            setIsPaused(false);
 
             const container = containerRef.current;
             if (container) {
@@ -341,6 +387,7 @@ export default function ReelsFeed({ onClose }) {
             }
 
             setCurrentIndex(newIndex);
+            setIsPaused(false);
 
             const container = containerRef.current;
             if (container) {
@@ -397,11 +444,12 @@ export default function ReelsFeed({ onClose }) {
             <button className="reels-close-btn" onClick={onClose}>✕</button>
 
             <div className="reels-feed-container" ref={containerRef}>
-                {videos.map((video) => (
+                {videos.map((video, index) => (
                     <div
                         key={video.id}
                         className="reels-feed-item"
                         data-video-id={video.id}
+                        onClick={index === currentIndex ? handleVideoClick : undefined}
                     >
                         <div className="reels-feed-video-wrapper">
                             <div id={`player-${video.id}`} className="reels-feed-video"></div>
@@ -411,6 +459,9 @@ export default function ReelsFeed({ onClose }) {
                                 <h3 className="reels-feed-title">{video.title}</h3>
                                 <p className="reels-feed-channel">{video.channelTitle}</p>
                             </div>
+                            {index === currentIndex && isPaused && (
+                                <div className="reels-play-icon">▶</div>
+                            )}
                         </div>
                     </div>
                 ))}
@@ -501,6 +552,7 @@ export default function ReelsFeed({ onClose }) {
           -webkit-overflow-scrolling: touch;
           scroll-snap-type: y mandatory;
           scroll-behavior: auto;
+          cursor: pointer;
         }
 
         .reels-feed-item {
@@ -565,6 +617,23 @@ export default function ReelsFeed({ onClose }) {
           text-shadow: 0 2px 8px rgba(0,0,0,0.8);
         }
 
+        .reels-play-icon {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          font-size: 64px;
+          color: #fff;
+          text-shadow: 0 2px 20px rgba(0,0,0,0.8);
+          pointer-events: none;
+          animation: fadeInOut 0.3s ease;
+        }
+
+        @keyframes fadeInOut {
+          from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+          to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+
         .loading-spinner {
           width: 40px;
           height: 40px;
@@ -596,11 +665,17 @@ export default function ReelsFeed({ onClose }) {
           .reels-feed-channel {
             font-size: 12px;
           }
+          .reels-play-icon {
+            font-size: 48px;
+          }
         }
 
         @media (max-width: 480px) {
           .reels-feed-video {
             max-width: 100%;
+          }
+          .reels-play-icon {
+            font-size: 36px;
           }
         }
       `}</style>
