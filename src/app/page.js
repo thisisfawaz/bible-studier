@@ -942,7 +942,7 @@ export default function Home() {
         .card-story .story-paragraph {
           margin-bottom: 15px !important;
           line-height: 1.8 !important;
-          color:#ffffff !important;
+          color: #d6d6d6 !important;
         }
         .card-story .story-paragraph:last-child {
           margin-bottom: 0 !important;
