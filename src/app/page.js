@@ -38,13 +38,55 @@ function renderInlineContent(text) {
 function renderMessage(text) {
   if (!text) return "";
 
-  const paragraphs = text.split(/\n\n|\n/).filter(p => p.trim());
+  // First, clean up the text - ensure proper paragraph breaks
+  // Replace single newlines followed by a capital letter or bold text with double newlines
+  let processedText = text;
+  
+  // If there are no double newlines, try to detect paragraphs
+  if (!processedText.includes('\n\n')) {
+    // Split by single newlines and filter out empty lines
+    const lines = processedText.split('\n').filter(line => line.trim());
+    
+    // Group lines into paragraphs (heuristic: if a line is short or starts with a bullet, it's part of previous paragraph)
+    const paragraphs = [];
+    let currentParagraph = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // Check if this line starts a new paragraph
+      const isBullet = line.startsWith('-') || line.startsWith('•') || line.startsWith('*');
+      const isBoldHeading = line.startsWith('**') && line.includes('**:');
+      const isShortLine = line.length < 30 && !isBullet;
+      const isNewParagraph = isBullet || isBoldHeading || 
+                            (isShortLine && i > 0 && lines[i-1].length > 30) ||
+                            (line.match(/^[A-Z]/) && i > 0 && lines[i-1].length > 30);
+      
+      if (isNewParagraph && currentParagraph.length > 0) {
+        paragraphs.push(currentParagraph.join(' '));
+        currentParagraph = [];
+      }
+      
+      currentParagraph.push(line);
+    }
+    
+    if (currentParagraph.length > 0) {
+      paragraphs.push(currentParagraph.join(' '));
+    }
+    
+    // Rejoin with double newlines
+    processedText = paragraphs.join('\n\n');
+  }
+  
+  // Now split by double newlines for actual paragraphs
+  const paragraphs = processedText.split(/\n\n/).filter(p => p.trim());
   
   return paragraphs.map((paragraph, index) => {
+    // Check if it's a list (contains bullet points)
     if (paragraph.includes('•') || paragraph.includes('-')) {
       const lines = paragraph.split('\n');
       return (
-        <div key={index} className="mb-4">
+        <div key={index} className="msg-paragraph" style={{ marginBottom: '10px', lineHeight: '1.8' }}>
           {lines.map((line, i) => {
             const cleanLine = line.replace(/^[•\-]\s*/, '').trim();
             if (cleanLine) {
@@ -61,16 +103,30 @@ function renderMessage(text) {
       );
     }
     
+    // Check if it's a bold heading
     if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
       return (
-        <p key={index} className="msg-paragraph font-bold text-lg mt-3 mb-3">
+        <p key={index} className="msg-paragraph" style={{ marginBottom: '20px', lineHeight: '1.8', fontWeight: 'bold', fontSize: '18px' }}>
           {renderInlineContent(paragraph.replace(/\*\*/g, ''))}
         </p>
       );
     }
     
+    // Check if it's a heading (starts with bold and colon)
+    if (paragraph.includes('**:')) {
+      const parts = paragraph.split('**:');
+      if (parts.length === 2) {
+        return (
+          <p key={index} className="msg-paragraph" style={{ marginBottom: '20px', lineHeight: '1.8' }}>
+            <strong>{parts[0].replace('**', '')}:</strong>{renderInlineContent(parts[1])}
+          </p>
+        );
+      }
+    }
+    
+    // Regular paragraph
     return (
-      <p key={index} className="msg-paragraph mb-4">
+      <p key={index} className="msg-paragraph" style={{ marginBottom: '20px', lineHeight: '1.8' }}>
         {renderInlineContent(paragraph)}
       </p>
     );
@@ -502,7 +558,7 @@ export default function Home() {
         .new-chat-btn {
           width: 100%;
           padding: 8px 12px;
-          border-radius: var(--radius-full);
+          border-radius: 8px !important;
           border: 1px solid var(--border-color);
           background: transparent;
           color: var(--text-secondary);
@@ -529,7 +585,7 @@ export default function Home() {
           align-items: center;
           gap: 10px;
           padding: 6px 10px;
-          border-radius: var(--radius-full);
+          border-radius: 8px !important;
           cursor: pointer;
           transition: all 0.15s;
           color: var(--text-secondary);
@@ -548,8 +604,17 @@ export default function Home() {
           display: none;
         }
         .session-info { flex: 1; min-width: 0; }
-        .session-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .session-date { font-size: 11px; color: var(--text-muted); }
+        .session-title { 
+          white-space: nowrap; 
+          overflow: hidden; 
+          text-overflow: ellipsis;
+          font-size: 13px;
+          font-weight: 500;
+        }
+        /* Hide the date text for chat sessions */
+        .session-item .session-date {
+          display: none !important;
+        }
 
         .sidebar-footer {
           border-top: 1px solid var(--border-color);
@@ -561,7 +626,7 @@ export default function Home() {
           display: block;
           text-align: center;
           padding: 8px 16px;
-          border-radius: var(--radius-full);
+          border-radius: 8px !important;
           border: 1px solid var(--border-color);
           background: transparent;
           color: var(--text-primary);
@@ -583,7 +648,7 @@ export default function Home() {
           align-items: center;
           gap: 10px;
           padding: 8px 10px;
-          border-radius: var(--radius-full);
+          border-radius: 8px !important;
           cursor: pointer;
           transition: background 0.2s;
         }
@@ -750,7 +815,7 @@ export default function Home() {
         }
 
         /* ============================================================
-           DEVOTION CARD - Removed hover effect
+           DEVOTION CARD
            ============================================================ */
         .devotion-card {
           background: var(--bg-card);
@@ -808,7 +873,7 @@ export default function Home() {
           background: rgba(255,255,255,0.03);
           border-left: 3px solid #ffffff;
           padding: 8px 14px;
-          margin-bottom: 12px;
+          margin-bottom: 16px;
           border-radius: 0 6px 6px 0;
           font-size: 14px;
           color: #f7f4ef;
@@ -819,21 +884,22 @@ export default function Home() {
           border-left: 3px solid #7c22fe;
           color: #4a4a5e;
         }
-        .card-story {
-          color: #c8c8d0;
-          font-size: 15px;
-          line-height: 1.7;
-          margin-bottom: 12px;
+        
+        /* Devotional story paragraph spacing - INCREASED */
+        .card-story .story-paragraph {
+          margin-bottom: 1rem !important;
+          line-height: 1.8 !important;
         }
-        .app.light .card-story {
-          color: #4a4a5e;
+        .card-story .story-paragraph:last-child {
+          margin-bottom: 0 !important;
         }
+        
         .prayer-section {
           background: rgba(255,255,255,0.02);
           border-left: 3px solid #ffffff;
           padding: 12px 16px;
           border-radius: 0 6px 6px 0;
-          margin-top: 4px;
+          margin-top: 16px;
         }
         .app.light .prayer-section {
           border-left: 3px solid #7c22fe;
@@ -952,6 +1018,15 @@ export default function Home() {
           min-height: 0;
         }
 
+        /* Chat message paragraph spacing - INCREASED */
+        .chat-messages .msg-paragraph {
+          margin-bottom: 10px !important;
+          line-height: 1.8 !important;
+        }
+        .chat-messages .msg-paragraph:last-child {
+          margin-bottom: 0 !important;
+        }
+
         /* Welcome Screen */
         .welcome-screen {
           flex: 1;
@@ -999,24 +1074,32 @@ export default function Home() {
           line-height: 1.6;
           word-wrap: break-word;
         }
+        
+        /* User message - dark gray background with white text (no gradient) */
         .chat-message.user .bubble {
-          background: var(--accent-gradient);
-          color: #fff;
+          background: #2a2a2e !important;
+          color: #f7f4ef !important;
           border-bottom-right-radius: 4px;
         }
+        
+        /* Assistant message - keep as is */
         .chat-message.assistant .bubble {
           background: var(--bg-secondary);
           color: var(--text-primary);
           border-bottom-left-radius: 4px;
           border: 1px solid var(--border-color);
         }
+        
         .chat-message .bubble .timestamp {
           font-size: 11px;
           opacity: 0.35;
           margin-top: 4px;
           display: block;
         }
-        .chat-message.user .bubble .timestamp { text-align: right; }
+        .chat-message.user .bubble .timestamp { 
+          text-align: right;
+          color: #a3a3a3 !important;
+        }
         .chat-message .bubble .sender {
           font-size: 11px;
           font-weight: 500;
@@ -1088,12 +1171,13 @@ export default function Home() {
         }
         .chat-input input::placeholder { color: var(--text-muted); }
 
+        /* Send button - gray with white text */
         .send-btn {
           padding: 8px 20px;
           border-radius: var(--radius-full);
           border: none;
-          background: #7c3aed;
-          color: #ffffff;
+          background: #4a4a4e !important;
+          color: #ffffff !important;
           font-size: 14px;
           font-weight: 500;
           cursor: pointer;
@@ -1103,15 +1187,15 @@ export default function Home() {
           flex-shrink: 0;
         }
         .send-btn:hover:not(:disabled) {
-          background: #6d28d9;
-          box-shadow: 0 2px 12px rgba(124, 58, 237, 0.3);
+          background: #5a5a5e !important;
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
         }
         .send-btn:disabled {
           opacity: 0.5;
           cursor: not-allowed;
         }
 
-        .msg-paragraph { margin-bottom: 1.5rem; line-height: 1.8; }
+        .msg-paragraph { margin-bottom: 5px; line-height: 1.8; }
         .msg-h2 { font-size: 18px; font-weight: 500; margin: 8px 0 4px; color: var(--text-primary); }
         .msg-h3 { font-size: 15px; font-weight: 500; margin: 6px 0 3px; color: var(--text-primary); }
         .msg-list-item { margin: 2px 0; padding-left: 4px; color: var(--text-secondary); }
@@ -1229,8 +1313,8 @@ export default function Home() {
           
           .main-header .tab-btn {
             flex: 0 0 auto !important;
-            padding: 4px 8px !important;
-            font-size: 12px !important;
+            padding: 4px 12px !important;
+            font-size: 14px !important;
             padding-bottom: 6px !important;
             white-space: nowrap !important;
             min-width: auto !important;
@@ -1246,22 +1330,39 @@ export default function Home() {
           }
           
           .main-header .tab-btn .icon-label {
-            font-size: 12px !important;
+            font-size: 14px !important;
             white-space: nowrap !important;
             line-height: 1.2 !important;
           }
           
+          /* Remove the default underline */
           .main-header .tab-btn::after {
             display: none !important;
           }
           
+          /* Active tab - only the short underline */
           .main-header .tab-btn.active {
-            border-bottom: 2px solid #ffffff !important;
             background: transparent !important;
             box-shadow: none !important;
+            position: relative !important;
           }
-          .app.light .main-header .tab-btn.active {
-            border-bottom: 2px solid #1a1a24 !important;
+          
+          /* Short underline that matches text width - just like desktop */
+          .main-header .tab-btn.active::after {
+            display: block !important;
+            content: '' !important;
+            position: absolute !important;
+            bottom: -2px !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            width: 60% !important;
+            height: 2px !important;
+            background: #ffffff !important;
+            border-radius: 2px !important;
+          }
+          
+          .app.light .main-header .tab-btn.active::after {
+            background: #1a1a24 !important;
           }
           
           .devotion-card { padding: 14px !important; }
@@ -1295,7 +1396,7 @@ export default function Home() {
             align-items: center !important;
             background: var(--bg-card) !important;
             border-top: 1px solid var(--border-color) !important;
-            min-height: 50px !important;
+            min-height: 5px !important;
           }
           .chat-input input {
             flex: 1 !important;
@@ -1311,6 +1412,11 @@ export default function Home() {
             width: auto !important;
             flex-shrink: 0 !important;
             height: 40px !important;
+            background: #4a4a4e !important;
+            color: #ffffff !important;
+          }
+          .send-btn:hover:not(:disabled) {
+            background: #5a5a5e !important;
           }
           
           /* Welcome screen on mobile */
@@ -1364,19 +1470,24 @@ export default function Home() {
           }
           
           .main-header .tab-btn {
-            padding: 2px 6px !important;
-            font-size: 10px !important;
+            padding: 2px 10px !important;
+            font-size: 14px !important;
             padding-bottom: 4px !important;
           }
           
           .main-header .tab-btn .icon-label {
-            font-size: 10px !important;
+            font-size: 14px !important;
+          }
+          
+          /* Active tab underline on small screens */
+          .main-header .tab-btn.active::after {
+            width: 60% !important;
           }
           
           .devotion-card { padding: 12px !important; }
           .card-title { font-size: 16px !important; }
           .card-scripture { font-size: 13px !important; }
-          .card-story { font-size: 14px !important; }
+          .card-story .story-paragraph { font-size: 14px !important; }
           
           /* CHAT - Fixed layout on small mobile */
           .chat-container { 
@@ -1408,6 +1519,11 @@ export default function Home() {
             padding: 8px 12px !important;
             font-size: 12px !important;
             height: 36px !important;
+            background: #4a4a4e !important;
+            color: #ffffff !important;
+          }
+          .send-btn:hover:not(:disabled) {
+            background: #5a5a5e !important;
           }
           .chat-message .bubble { max-width: 92% !important; font-size: 13px !important; }
           .welcome-screen .welcome-title { font-size: 20px !important; }
@@ -1576,7 +1692,14 @@ export default function Home() {
                 </div>
                 <h2 className="card-title">{selectedDevotion.title}</h2>
                 <div className="card-scripture">{selectedDevotion.scripture}</div>
-                <p className="card-story">{selectedDevotion.story}</p>
+                
+                {/* Devotion story with proper paragraph spacing */}
+                <div className="card-story">
+                  {selectedDevotion.story.split(/\n\n|\n/).filter(p => p.trim()).map((paragraph, idx) => (
+                    <p key={idx} className="story-paragraph">{paragraph}</p>
+                  ))}
+                </div>
+                
                 {selectedDevotion.prayer && (
                   <div className="prayer-section">
                     <div className="prayer-title">🙏 Prayer</div>

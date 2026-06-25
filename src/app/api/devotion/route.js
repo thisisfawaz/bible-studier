@@ -52,6 +52,17 @@ function getTodayDevotion(devotions) {
   return devotions.find(d => d.date === today) || null;
 }
 
+// Format the story with proper paragraph breaks
+function formatStory(story) {
+  if (!story) return '';
+  
+  // First, split by any newlines (both \n\n and \n)
+  const paragraphs = story.split(/\n\n|\n/).filter(p => p.trim());
+  
+  // Join with double newlines for proper paragraph spacing
+  return paragraphs.join('\n\n');
+}
+
 export async function GET() {
   const devotions = getDevotions();
   const today = getTodayDate();
@@ -79,16 +90,22 @@ export async function POST(request) {
 
     let devotions = getDevotions();
     
+    // Format the story with proper paragraph breaks
+    const formattedDevotion = {
+      ...devotion,
+      story: formatStory(devotion.story || '')
+    };
+    
     // Check if today already has a devotion
     const today = getTodayDate();
     const existingIndex = devotions.findIndex(d => d.date === today);
     
     if (existingIndex !== -1) {
       // Replace today's devotion
-      devotions[existingIndex] = { ...devotion, date: today };
+      devotions[existingIndex] = { ...formattedDevotion, date: today };
     } else {
       // Add new devotion
-      devotions.push({ ...devotion, date: today });
+      devotions.push({ ...formattedDevotion, date: today });
     }
     
     // Save (automatically keeps last 10)
