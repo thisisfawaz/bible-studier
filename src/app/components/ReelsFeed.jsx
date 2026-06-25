@@ -7,9 +7,7 @@ const VIDEO_CACHE_KEY = 'cached_reels_data';
 const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Default videos (fallback if cache is empty)
-const DEFAULT_VIDEOS = [
-  // Add your video IDs here as fallback
-];
+const DEFAULT_VIDEOS = [];
 
 // Shuffle function
 const shuffleArray = (array) => {
@@ -35,7 +33,6 @@ export default function ReelsFeed({ onClose }) {
     const [apiReady, setApiReady] = useState(false);
     const [isInitialLoad, setIsInitialLoad] = useState(true);
     const [isPaused, setIsPaused] = useState(false);
-    const [shuffledVideos, setShuffledVideos] = useState([]);
     const [showPlayIcon, setShowPlayIcon] = useState(false);
     const iconTimeoutRef = useRef(null);
 
@@ -66,7 +63,6 @@ export default function ReelsFeed({ onClose }) {
                 if (cachedVideos && cachedVideos.length > 0 && age < CACHE_DURATION) {
                     console.log('📦 Loading videos from cache...');
                     const shuffled = shuffleArray(cachedVideos);
-                    setShuffledVideos(shuffled);
                     setVideos(shuffled);
                     setLoading(false);
                     setIsInitialLoad(false);
@@ -94,25 +90,14 @@ export default function ReelsFeed({ onClose }) {
                     timestamp: Date.now()
                 }));
                 const shuffled = shuffleArray(data.videos);
-                setShuffledVideos(shuffled);
                 setVideos(shuffled);
                 setIsInitialLoad(false);
             } else {
                 setError('No videos found');
-                if (DEFAULT_VIDEOS.length > 0) {
-                    const shuffled = shuffleArray(DEFAULT_VIDEOS);
-                    setShuffledVideos(shuffled);
-                    setVideos(shuffled);
-                }
             }
         } catch (err) {
             console.error('Error fetching videos:', err);
             setError(err.message);
-            if (DEFAULT_VIDEOS.length > 0) {
-                const shuffled = shuffleArray(DEFAULT_VIDEOS);
-                setShuffledVideos(shuffled);
-                setVideos(shuffled);
-            }
         } finally {
             setLoading(false);
         }
@@ -133,7 +118,6 @@ export default function ReelsFeed({ onClose }) {
                         timestamp: Date.now()
                     }));
                     const shuffled = shuffleArray(data.videos);
-                    setShuffledVideos(shuffled);
                     setVideos(shuffled);
                     console.log('🔄 Cache updated with new videos');
                 }
@@ -161,7 +145,6 @@ export default function ReelsFeed({ onClose }) {
                 player.pauseVideo();
                 setIsPaused(true);
                 setShowPlayIcon(true);
-                // Auto-hide play icon after 2 seconds
                 if (iconTimeoutRef.current) {
                     clearTimeout(iconTimeoutRef.current);
                 }
@@ -200,7 +183,7 @@ export default function ReelsFeed({ onClose }) {
                         videoId: video.id,
                         playerVars: {
                             autoplay: index === 0 ? 1 : 0,
-                            controls: 0, // No controls
+                            controls: 0,
                             rel: 0,
                             loop: 1,
                             playlist: video.id,
@@ -218,6 +201,7 @@ export default function ReelsFeed({ onClose }) {
                                 if (index === 0) {
                                     event.target.playVideo();
                                     setIsPaused(false);
+                                    setShowPlayIcon(false);
                                 }
                             },
                             onStateChange: (event) => {
@@ -317,7 +301,6 @@ export default function ReelsFeed({ onClose }) {
             const diffX = touchStartX.current - touchEndX;
             const timeDiff = Date.now() - touchStartTime.current;
 
-            // Check if it's a tap (small movement, quick touch)
             if (Math.abs(diffY) < 20 && Math.abs(diffX) < 20 && timeDiff < 300) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -325,7 +308,6 @@ export default function ReelsFeed({ onClose }) {
                 return;
             }
 
-            // It's a swipe
             if (Math.abs(diffY) < 30) return;
 
             if (diffY > 0) {
@@ -340,22 +322,15 @@ export default function ReelsFeed({ onClose }) {
             e.stopPropagation();
         };
 
-        // Prevent all default touch behaviors
-        const handleTouchCancel = (e) => {
-            // Do nothing, just prevent default
-        };
-
         container.addEventListener('touchstart', handleTouchStart, { passive: true });
         container.addEventListener('touchmove', handleTouchMove, { passive: false });
         container.addEventListener('touchend', handleTouchEnd, { passive: false });
-        container.addEventListener('touchcancel', handleTouchCancel, { passive: false });
         container.addEventListener('contextmenu', handleContextMenu);
 
         return () => {
             container.removeEventListener('touchstart', handleTouchStart);
             container.removeEventListener('touchmove', handleTouchMove);
             container.removeEventListener('touchend', handleTouchEnd);
-            container.removeEventListener('touchcancel', handleTouchCancel);
             container.removeEventListener('contextmenu', handleContextMenu);
         };
     }, [videos.length, currentIndex, isPaused]);
@@ -529,7 +504,6 @@ export default function ReelsFeed({ onClose }) {
                         <div className="reels-feed-overlay">
                             <div className="reels-feed-info">
                                 <h3 className="reels-feed-title">{video.title}</h3>
-                                <p className="reels-feed-channel">{video.channelTitle}</p>
                             </div>
                             {index === currentIndex && showPlayIcon && (
                                 <div className="reels-play-icon">▶</div>
@@ -656,8 +630,6 @@ export default function ReelsFeed({ onClose }) {
           align-items: center;
           justify-content: center;
           background: #000;
-          pointer-events: none;
-          touch-action: none;
         }
 
         .reels-feed-video {
@@ -666,8 +638,15 @@ export default function ReelsFeed({ onClose }) {
           max-width: 400px;
           aspect-ratio: 9 / 16;
           background: #000;
-          pointer-events: none;
-          touch-action: none;
+        }
+
+        /* Hide YouTube controls */
+        .reels-feed-video iframe {
+          pointer-events: auto !important;
+        }
+
+        .reels-feed-video iframe::-webkit-media-controls-enclosure {
+          display: none !important;
         }
 
         .reels-feed-overlay {
@@ -681,6 +660,7 @@ export default function ReelsFeed({ onClose }) {
           justify-content: space-between;
           align-items: flex-end;
           pointer-events: none;
+          z-index: 10;
         }
         .reels-feed-info {
           pointer-events: auto;
@@ -697,12 +677,6 @@ export default function ReelsFeed({ onClose }) {
           -webkit-box-orient: vertical;
           overflow: hidden;
         }
-        .reels-feed-channel {
-          font-size: 13px;
-          color: rgba(255,255,255,0.8);
-          margin: 0;
-          text-shadow: 0 2px 8px rgba(0,0,0,0.8);
-        }
 
         .reels-play-icon {
           position: absolute;
@@ -714,7 +688,7 @@ export default function ReelsFeed({ onClose }) {
           text-shadow: 0 2px 20px rgba(0,0,0,0.8);
           pointer-events: none;
           animation: fadeInOut 0.3s ease;
-          z-index: 10;
+          z-index: 20;
         }
 
         @keyframes fadeInOut {
@@ -736,11 +710,6 @@ export default function ReelsFeed({ onClose }) {
           to { transform: rotate(360deg); }
         }
 
-        /* Hide any YouTube branding that might appear */
-        .reels-feed-video iframe {
-          pointer-events: none !important;
-        }
-
         @media (max-width: 768px) {
           .reels-feed-video {
             max-width: 100%;
@@ -755,9 +724,6 @@ export default function ReelsFeed({ onClose }) {
           .reels-feed-title {
             font-size: 14px;
           }
-          .reels-feed-channel {
-            font-size: 12px;
-          }
           .reels-play-icon {
             font-size: 48px;
           }
@@ -769,6 +735,16 @@ export default function ReelsFeed({ onClose }) {
           }
           .reels-play-icon {
             font-size: 36px;
+          }
+          .reels-close-btn {
+            top: 10px;
+            left: 10px;
+            width: 32px;
+            height: 32px;
+            font-size: 16px;
+          }
+          .reels-feed-title {
+            font-size: 13px;
           }
         }
       `}</style>

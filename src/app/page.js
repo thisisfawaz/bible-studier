@@ -39,54 +39,46 @@ function renderMessage(text) {
   if (!text) return "";
 
   // First, clean up the text - ensure proper paragraph breaks
-  // Replace single newlines followed by a capital letter or bold text with double newlines
   let processedText = text;
-
+  
   // If there are no double newlines, try to detect paragraphs
   if (!processedText.includes('\n\n')) {
-    // Split by single newlines and filter out empty lines
     const lines = processedText.split('\n').filter(line => line.trim());
-
-    // Group lines into paragraphs (heuristic: if a line is short or starts with a bullet, it's part of previous paragraph)
     const paragraphs = [];
     let currentParagraph = [];
-
+    
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-
-      // Check if this line starts a new paragraph
       const isBullet = line.startsWith('-') || line.startsWith('•') || line.startsWith('*');
       const isBoldHeading = line.startsWith('**') && line.includes('**:');
       const isShortLine = line.length < 30 && !isBullet;
-      const isNewParagraph = isBullet || isBoldHeading ||
-        (isShortLine && i > 0 && lines[i - 1].length > 30) ||
-        (line.match(/^[A-Z]/) && i > 0 && lines[i - 1].length > 30);
-
+      const isNewParagraph = isBullet || isBoldHeading || 
+                            (isShortLine && i > 0 && lines[i-1].length > 30) ||
+                            (line.match(/^[A-Z]/) && i > 0 && lines[i-1].length > 30);
+      
       if (isNewParagraph && currentParagraph.length > 0) {
         paragraphs.push(currentParagraph.join(' '));
         currentParagraph = [];
       }
-
+      
       currentParagraph.push(line);
     }
-
+    
     if (currentParagraph.length > 0) {
       paragraphs.push(currentParagraph.join(' '));
     }
-
-    // Rejoin with double newlines
+    
     processedText = paragraphs.join('\n\n');
   }
-
-  // Now split by double newlines for actual paragraphs
+  
   const paragraphs = processedText.split(/\n\n/).filter(p => p.trim());
-
+  
   return paragraphs.map((paragraph, index) => {
     // Check if it's a list (contains bullet points)
     if (paragraph.includes('•') || paragraph.includes('-')) {
       const lines = paragraph.split('\n');
       return (
-        <div key={index} className="msg-paragraph" style={{ marginBottom: '10px', lineHeight: '1.8' }}>
+        <div key={index} className="msg-paragraph" style={{ marginBottom: '25px', lineHeight: '1.8' }}>
           {lines.map((line, i) => {
             const cleanLine = line.replace(/^[•\-]\s*/, '').trim();
             if (cleanLine) {
@@ -102,31 +94,31 @@ function renderMessage(text) {
         </div>
       );
     }
-
+    
     // Check if it's a bold heading
     if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
       return (
-        <p key={index} className="msg-paragraph" style={{ marginBottom: '20px', lineHeight: '1.8', fontWeight: 'bold', fontSize: '18px' }}>
+        <p key={index} className="msg-paragraph" style={{ marginBottom: '25px', lineHeight: '1.8', fontWeight: 'bold', fontSize: '18px' }}>
           {renderInlineContent(paragraph.replace(/\*\*/g, ''))}
         </p>
       );
     }
-
+    
     // Check if it's a heading (starts with bold and colon)
     if (paragraph.includes('**:')) {
       const parts = paragraph.split('**:');
       if (parts.length === 2) {
         return (
-          <p key={index} className="msg-paragraph" style={{ marginBottom: '20px', lineHeight: '1.8' }}>
+          <p key={index} className="msg-paragraph" style={{ marginBottom: '25px', lineHeight: '1.8' }}>
             <strong>{parts[0].replace('**', '')}:</strong>{renderInlineContent(parts[1])}
           </p>
         );
       }
     }
-
+    
     // Regular paragraph
     return (
-      <p key={index} className="msg-paragraph" style={{ marginBottom: '20px', lineHeight: '1.8' }}>
+      <p key={index} className="msg-paragraph" style={{ marginBottom: '25px', lineHeight: '1.8' }}>
         {renderInlineContent(paragraph)}
       </p>
     );
@@ -345,7 +337,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ devotion })
       });
-
+      
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -485,6 +477,84 @@ export default function Home() {
         }
 
         /* ============================================================
+           SIDEBAR TOP ROW - Title and Close button aligned
+           ============================================================ */
+        .sidebar-top-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 4px 4px 24px 10px;
+          border-bottom: 1px solid var(--border-color);
+          margin-bottom: 16px;
+          flex-shrink: 0;
+        }
+
+        .sidebar-close {
+          display: none;
+          align-items: center;
+          justify-content: center;
+          padding: 4px 8px;
+          font-size: 20px;
+          cursor: pointer;
+          color: var(--text-secondary);
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          transition: all 0.2s;
+        }
+
+        .sidebar-close:hover {
+          color: var(--text-primary);
+          background: var(--bg-hover);
+        }
+
+        .sidebar-app-title {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          text-decoration: none;
+          cursor: pointer;
+          transition: opacity 0.2s;
+          flex: 1;
+        }
+
+        .sidebar-app-title:hover {
+          opacity: 0.8;
+        }
+
+        .sidebar-app-title .sidebar-bible-icon {
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--accent-gradient);
+          border-radius: 4px;
+          color: #fff;
+          font-size: 14px;
+          font-weight: 700;
+          flex-shrink: 0;
+          box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+        }
+
+        .sidebar-app-title .sidebar-title-text {
+          font-size: 18px;
+          font-weight: 600;
+          letter-spacing: -0.02em;
+          background: var(--accent-gradient);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-shrink: 0;
+        }
+
+        /* ============================================================
            SIDEBAR OVERLAY (Mobile)
            ============================================================ */
         .sidebar-overlay {
@@ -502,7 +572,7 @@ export default function Home() {
         }
 
         /* ============================================================
-           SIDEBAR
+           SIDEBAR - Fixed layout with scrolling sessions only
            ============================================================ */
         .sidebar {
           width: 260px;
@@ -512,42 +582,19 @@ export default function Home() {
           padding: 20px 12px;
           display: flex;
           flex-direction: column;
-          overflow-y: auto;
           height: 100vh;
           position: sticky;
           top: 0;
           transition: background 0.3s ease, border-color 0.3s ease;
-        }
-
-        .sidebar-close {
-          display: none;
-          align-items: center;
-          justify-content: flex-end;
-          padding: 4px 8px 12px;
-          font-size: 20px;
-          cursor: pointer;
-          color: var(--text-secondary);
-        }
-        .sidebar-close:hover {
-          color: var(--text-primary);
-        }
-
-        .sidebar-logo {
-          padding: 4px 10px 16px;
-          font-size: 18px;
-          font-weight: 600;
-          letter-spacing: -0.02em;
-          background: var(--accent-gradient);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
+          overflow: hidden;
         }
 
         .sidebar-header {
-          padding: 0 4px 8px;
-          border-bottom: 1px solid var(--border-color);
-          margin-bottom: 8px;
+          padding: 0 4px 16px;
+          margin-bottom: 16px;
+          flex-shrink: 0;
         }
+
         .sidebar-title {
           font-size: 11px;
           font-weight: 500;
@@ -555,6 +602,7 @@ export default function Home() {
           letter-spacing: 0.06em;
           color: var(--text-muted);
         }
+
         .new-chat-btn {
           width: 100%;
           padding: 8px 12px;
@@ -579,12 +627,14 @@ export default function Home() {
           flex: 1;
           overflow-y: auto;
           padding: 0 4px;
+          min-height: 0;
         }
+
         .session-item {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 10px 10px;
+          padding: 8px 10px;
           border-radius: 8px !important;
           cursor: pointer;
           transition: all 0.15s;
@@ -618,8 +668,9 @@ export default function Home() {
 
         .sidebar-footer {
           border-top: 1px solid var(--border-color);
-          padding-top: 12px;
-          margin-top: 4px;
+          padding-top: 16px;
+          margin-top: 12px;
+          flex-shrink: 0;
         }
 
         .btn-upgrade {
@@ -641,22 +692,6 @@ export default function Home() {
         .btn-upgrade:hover {
           background: var(--bg-hover);
           border-color: var(--border-light);
-        }
-
-        /* Add light mode specific styles */
-        .app.light .btn-upgrade {
-          background: #ffffff;  /* White background */
-          color: #1a1a24;  /* Dark text */
-          border-color: #9a9a9a;  /* Visible border */
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);  /* Subtle shadow */
-          padding: 10px 16px;  /* Slightly larger */
-          font-weight: 500;
-        }
-        .app.light .btn-upgrade:hover {
-          background: #f0f0f2;  /* Slightly darker on hover */
-          border-color: #b0b0b8;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
         .sidebar-user {
@@ -734,13 +769,6 @@ export default function Home() {
           flex-shrink: 0;
         }
 
-        .header-left {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          flex-shrink: 0;
-        }
-
         /* ============================================================
            TABS — Now inside main-header - OVERRIDES GLOBAL CSS
            ============================================================ */
@@ -767,7 +795,7 @@ export default function Home() {
 
         .main-header .tab-btn {
           flex: none !important;
-          padding: 10px 20px !important;
+          padding: 12px 20px !important;
           border: none !important;
           border-radius: 0 !important;
           font-size: 14px !important;
@@ -782,7 +810,7 @@ export default function Home() {
           justify-content: center !important;
           gap: 8px !important;
           position: relative !important;
-          padding-bottom: 12px !important;
+          padding-bottom: 16px !important;
           white-space: nowrap !important;
           box-shadow: none !important;
           width: auto !important;
@@ -845,7 +873,7 @@ export default function Home() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 20px;
+          margin-bottom: 16px;
           flex-wrap: wrap;
           gap: 6px;
         }
@@ -876,8 +904,7 @@ export default function Home() {
         }
         .card-date {
           font-size: 12px;
-          color: #ffffff;
-          font-weight: 500;
+          color: var(--text-muted);
         }
         .card-title {
           font-size: 22px;
@@ -890,7 +917,7 @@ export default function Home() {
           background: rgba(255,255,255,0.03);
           border-left: 3px solid #ffffff;
           padding: 8px 14px;
-          margin-bottom: 16px;
+          margin-bottom: 24px;
           border-radius: 0 6px 6px 0;
           font-size: 14px;
           color: #f7f4ef;
@@ -898,26 +925,17 @@ export default function Home() {
         }
         .app.light .card-scripture {
           background: rgba(0,0,0,0.02);
-          border-left: 3px solid #222222;
+          border-left: 3px solid #7c22fe;
           color: #4a4a5e;
         }
         
-        .app.light .card-date {
-          color: #4a4a5e;
-          font-weight: 500;
-        }
-
-        /* Devotional story paragraph spacing - INCREASED */
+        /* Devotional story paragraph spacing */
         .card-story .story-paragraph {
-          margin-bottom: 1rem !important;
+          margin-bottom: 40px !important;
           line-height: 1.8 !important;
         }
         .card-story .story-paragraph:last-child {
           margin-bottom: 0 !important;
-        }
-
-        .app.light .card-story {
-          color: #202020;  /* <-- CHANGE THIS VALUE */
         }
         
         .prayer-section {
@@ -926,10 +944,9 @@ export default function Home() {
           padding: 12px 16px;
           border-radius: 0 6px 6px 0;
           margin-top: 16px;
-          margin-bottom: 20px;
         }
         .app.light .prayer-section {
-          border-left: 3px solid #222222;
+          border-left: 3px solid #7c22fe;
           background: rgba(0,0,0,0.02);
         }
         .prayer-title {
@@ -940,7 +957,7 @@ export default function Home() {
           letter-spacing: 0.02em;
         }
         .app.light .prayer-title {
-          color: #222222;
+          color: #7c22fe;
         }
         .prayer-text {
           color: #f7f4ef;
@@ -1000,22 +1017,6 @@ export default function Home() {
           background: rgba(124, 58, 237, 0.2);
         }
 
-        /* Add light mode specific styles */
-        .app.light .action-btn {
-          background: #d0d0d0;  /* White background */
-          color: #1a1a24;  /* Dark text */
-          border-color: #d0d0d8;  /* Visible border */
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);  /* Subtle shadow */
-          padding: 8px 18px;  /* Slightly larger */
-          font-weight: 500;
-        }
-        .app.light .action-btn:hover {
-          background: #f0f0f2;  /* Slightly darker on hover */
-          border-color: #b0b0b8;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
         .download-btn {
           margin-top: 12px;
           padding: 8px 16px;
@@ -1061,29 +1062,13 @@ export default function Home() {
           min-height: 0;
         }
 
-        /* Chat message paragraph spacing - INCREASED */
+        /* Chat message paragraph spacing */
         .chat-messages .msg-paragraph {
-          margin-bottom: 10px !important;
+          margin-bottom: 20px !important;
           line-height: 1.8 !important;
         }
         .chat-messages .msg-paragraph:last-child {
           margin-bottom: 0 !important;
-        }
-
-        /* Light mode - white background like devotional card */
-        .app.light .chat-messages {
-            background: #ffffff !important;  /* White background */
-            border-color: #e0e0e8;  /* Lighter border */
-        }
-
-        .app.light .chat-message.assistant .bubble {
-            background: #e8e8e8 !important;  /* White background */
-            border-color: #e0e0e8;  /* Lighter border */
-        }
-
-        .app.light .chat-message.assistant .bubble .timestamp {
-            color: #4e4e4e !important;
-            opacity: 1 !important;
         }
 
         /* Welcome Screen */
@@ -1230,15 +1215,6 @@ export default function Home() {
         }
         .chat-input input::placeholder { color: var(--text-muted); }
 
-        .app.light .chat-input input {
-            color: #000000 !important;
-            border: 1px solid #707070 !important;
-        }
-
-        .app.light .chat-input input::placeholder {
-          color: #404040 !important;  /* Dark gray for light mode */
-        }
-
         /* Send button - gray with white text */
         .send-btn {
           padding: 8px 20px;
@@ -1290,6 +1266,110 @@ export default function Home() {
         }
 
         /* ============================================================
+           LIGHT MODE BUTTON OVERRIDES
+           ============================================================ */
+        .app.light .action-btn {
+          background: #ffffff;
+          color: #1a1a24;
+          border-color: #d0d0d8;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+          padding: 8px 18px;
+          font-weight: 500;
+        }
+        .app.light .action-btn:hover {
+          background: #f0f0f2;
+          border-color: #b0b0b8;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .app.light .btn-upgrade {
+          background: #ffffff;
+          color: #1a1a24;
+          border-color: #d0d0d8;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+          padding: 10px 16px;
+          font-weight: 500;
+        }
+        .app.light .btn-upgrade:hover {
+          background: #f0f0f2;
+          border-color: #b0b0b8;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .app.light .download-btn {
+          background: #ffffff;
+          color: #1a1a24;
+          border-color: #d0d0d8;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+          font-weight: 500;
+        }
+        .app.light .download-btn:hover {
+          background: #f0f0f2;
+          border-color: #b0b0b8;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .app.light .chat-container {
+          background: #ffffff !important;
+          border-color: #e0e0e8 !important;
+        }
+
+        .app.light .chat-messages {
+          background: #ffffff !important;
+        }
+
+        .app.light .chat-message.assistant .bubble {
+          background: #f5f5f8 !important;
+          color: #1a1a24 !important;
+          border-color: #e0e0e8 !important;
+        }
+
+        .app.light .chat-message.user .bubble {
+          background: #e8e8ed !important;
+          color: #1a1a24 !important;
+        }
+
+        .app.light .chat-input {
+          background: #ffffff !important;
+          border-top-color: #e0e0e8 !important;
+        }
+
+        .app.light .chat-input input {
+          background: #f5f5f8 !important;
+          color: #1a1a24 !important;
+          border-color: #e0e0e8 !important;
+        }
+
+        .app.light .chat-input input::placeholder {
+          color: #8a8a9e !important;
+        }
+
+        .app.light .send-btn {
+          background: #4a4a4e !important;
+          color: #ffffff !important;
+        }
+
+        .app.light .send-btn:hover:not(:disabled) {
+          background: #3a3a3e !important;
+        }
+
+        .app.light .welcome-screen .welcome-title {
+          color: #1a1a24 !important;
+        }
+
+        .app.light .welcome-screen .welcome-subtitle {
+          color: #4a4a5e !important;
+        }
+
+        .app.light .chat-message.assistant .bubble .timestamp {
+          color: #000000 !important;
+          opacity: 1 !important;
+        }
+
+        /* ============================================================
            MOBILE RESPONSIVE - OVERRIDES GLOBAL CSS
            ============================================================ */
         @media (max-width: 768px) {
@@ -1305,6 +1385,30 @@ export default function Home() {
             padding: 2px !important;
             margin: 0 !important;
           }
+
+          .sidebar-top-row {
+            padding: 8px 4px 16px 10px !important;
+            margin-bottom: 12px !important;
+          }
+
+          .sidebar-close {
+            display: flex !important;
+            width: 32px !important;
+            height: 32px !important;
+            font-size: 18px !important;
+          }
+
+          .sidebar-app-title .sidebar-bible-icon {
+            width: 24px !important;
+            height: 24px !important;
+            font-size: 12px !important;
+          }
+          .sidebar-app-title .sidebar-title-text {
+            font-size: 16px !important;
+          }
+          .sidebar-app-title {
+            gap: 8px !important;
+          }
           
           .sidebar {
             position: fixed !important;
@@ -1317,17 +1421,18 @@ export default function Home() {
             background: var(--bg-primary) !important;
             border-right: 1px solid var(--border-color) !important;
             transition: transform 0.3s ease !important;
-            overflow-y: auto !important;
+            overflow: hidden !important;
             padding: 16px 12px !important;
+            display: flex !important;
+            flex-direction: column !important;
           }
           .sidebar.open { transform: translateX(0) !important; }
           .sidebar.closed { transform: translateX(-100%) !important; }
           
-          .sidebar-close { display: flex !important; }
           .sidebar-overlay.open { display: block !important; opacity: 1 !important; }
           
           .main { 
-            padding: 12px 12px 0 !important; 
+            padding: 16px 16px 0 !important; 
             height: 100dvh !important;
             max-height: 100dvh !important;
             overflow: hidden !important;
@@ -1352,6 +1457,7 @@ export default function Home() {
             align-items: center !important;
             justify-content: center !important;
             height: 100% !important;
+            gap: 6px !important;
           }
           
           /* OVERRIDE GLOBAL .tabs styles */
@@ -1435,6 +1541,21 @@ export default function Home() {
           
           .devotion-card { padding: 14px !important; }
           .card-title { font-size: 17px !important; }
+
+          /* SIDEBAR SESSIONS - SCROLLABLE ON MOBILE */
+          .sidebar-sessions {
+            flex: 1 !important;
+            overflow-y: auto !important;
+            padding: 0 4px !important;
+            min-height: 0 !important;
+          }
+
+          .sidebar-footer {
+            border-top: 1px solid var(--border-color) !important;
+            padding-top: 16px !important;
+            margin-top: 12px !important;
+            flex-shrink: 0 !important;
+          }
           
           /* CHAT - Fixed layout on mobile */
           .chat-container { 
@@ -1464,7 +1585,7 @@ export default function Home() {
             align-items: center !important;
             background: var(--bg-card) !important;
             border-top: 1px solid var(--border-color) !important;
-            min-height: 5px !important;
+            min-height: 50px !important;
           }
           .chat-input input {
             flex: 1 !important;
@@ -1473,13 +1594,6 @@ export default function Home() {
             min-width: 0 !important;
             height: 40px !important;
           }
-
-          /* Light mode - white background like devotional card */
-          .app.light .chat-messages {
-            background: #ffffff !important;  /* White background */
-            border-color: #e0e0e8;  /* Lighter border */
-          }
-
           .send-btn {
             padding: 10px 14px !important;
             font-size: 13px !important;
@@ -1518,7 +1632,7 @@ export default function Home() {
 
         @media (max-width: 480px) {
           .main { 
-            padding: 10px 10px 0 !important; 
+            padding: 14px 10px 0 !important; 
             height: 100dvh !important;
             max-height: 100dvh !important;
             overflow: hidden !important;
@@ -1528,6 +1642,44 @@ export default function Home() {
             gap: 4px !important;
             min-height: 32px !important;
             margin-bottom: 10px !important;
+          }
+
+          .sidebar-top-row {
+            padding: 6px 4px 12px 10px !important;
+            margin-bottom: 10px !important;
+          }
+
+          .sidebar-close {
+            width: 28px !important;
+            height: 28px !important;
+            font-size: 16px !important;
+          }
+
+          .sidebar-app-title .sidebar-bible-icon {
+            width: 20px !important;
+            height: 20px !important;
+            font-size: 10px !important;
+          }
+          .sidebar-app-title .sidebar-title-text {
+            font-size: 14px !important;
+          }
+          .sidebar-app-title {
+            gap: 6px !important;
+          }
+
+          /* SIDEBAR SESSIONS - SCROLLABLE ON SMALL MOBILE */
+          .sidebar-sessions {
+            flex: 1 !important;
+            overflow-y: auto !important;
+            padding: 0 4px !important;
+            min-height: 0 !important;
+          }
+
+          .sidebar-footer {
+            border-top: 1px solid var(--border-color) !important;
+            padding-top: 16px !important;
+            margin-top: 12px !important;
+            flex-shrink: 0 !important;
           }
           
           .hamburger-btn {
@@ -1611,8 +1763,20 @@ export default function Home() {
 
       {/* ===== SIDEBAR ===== */}
       <aside className={`sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
-        <div className="sidebar-close" onClick={toggleSidebar}>✕</div>
-        <div className="sidebar-logo">✦ Bible Studier</div>
+        {/* Title and Close button in same row */}
+        <div className="sidebar-top-row">
+          <a href="/" className="sidebar-app-title" onClick={(e) => {
+            e.preventDefault();
+            setActiveTab('devotions');
+            setShowReels(false);
+            if (!selectedDevotionId) setSelectedDevotionId('daily');
+            if (window.innerWidth < 768) setIsSidebarOpen(false);
+          }}>
+            <span className="sidebar-bible-icon">✝</span>
+            <span className="sidebar-title-text">Bible Studier</span>
+          </a>
+          <div className="sidebar-close" onClick={toggleSidebar}>✕</div>
+        </div>
 
         <div className="sidebar-header">
           {activeTab === 'chat' ? (
@@ -1767,14 +1931,14 @@ export default function Home() {
                 </div>
                 <h2 className="card-title">{selectedDevotion.title}</h2>
                 <div className="card-scripture">{selectedDevotion.scripture}</div>
-
+                
                 {/* Devotion story with proper paragraph spacing */}
                 <div className="card-story">
                   {selectedDevotion.story.split(/\n\n|\n/).filter(p => p.trim()).map((paragraph, idx) => (
                     <p key={idx} className="story-paragraph">{paragraph}</p>
                   ))}
                 </div>
-
+                
                 {selectedDevotion.prayer && (
                   <div className="prayer-section">
                     <div className="prayer-title">🙏 Prayer</div>
