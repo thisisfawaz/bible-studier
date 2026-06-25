@@ -409,6 +409,7 @@ export default function Home() {
           height: 28px;
           align-items: center;
           justify-content: center;
+          flex-shrink: 0;
         }
         .hamburger-line {
           width: 20px;
@@ -425,12 +426,6 @@ export default function Home() {
         }
         .hamburger-btn.open .hamburger-line:nth-child(3) {
           transform: rotate(-45deg) translate(4px, -4px);
-        }
-
-        .header-left {
-          display: flex;
-          align-items: center;
-          gap: 12px;
         }
 
         /* ============================================================
@@ -529,8 +524,6 @@ export default function Home() {
           overflow-y: auto;
           padding: 0 4px;
         }
-        
-        /* ===== FIXED: SESSION ITEM STYLES ===== */
         .session-item {
           display: flex;
           align-items: center;
@@ -539,58 +532,24 @@ export default function Home() {
           border-radius: var(--radius-full);
           cursor: pointer;
           transition: all 0.15s;
+          color: var(--text-secondary);
           font-size: 13px;
         }
-        
-        /* Dark mode - default state */
-        .app.dark .session-item {
-          color: #a3a3a3;
-        }
-        .app.dark .session-item:hover {
+        .session-item:hover {
           background: var(--bg-hover);
-          color: #f7f4ef;
+          color: var(--text-primary);
         }
-        .app.dark .session-item.active {
-          background: #2d2d30;
-          color: #f7f4ef;
+        .session-item.active {
+          background: var(--bg-active);
+          color: var(--text-primary);
         }
-        
-        /* Light mode - default state */
-        .app.light .session-item {
-          color: #4a4a5e;
-        }
-        .app.light .session-item:hover {
-          background: var(--bg-hover);
-          color: #1a1a24;
-        }
-        .app.light .session-item.active {
-          background: #ffffff;
-          color: #1a1a24;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-          border: 1px solid var(--border-color);
-        }
-        
+        /* Remove icons from session items */
         .session-item .icon { 
-          font-size: 14px; 
-          flex-shrink: 0; 
-          opacity: 0.5; 
+          display: none;
         }
-        .session-item.active .icon { 
-          opacity: 1; 
-        }
-        .session-info { 
-          flex: 1; 
-          min-width: 0; 
-        }
-        .session-title { 
-          white-space: nowrap; 
-          overflow: hidden; 
-          text-overflow: ellipsis;
-        }
-        .session-date { 
-          font-size: 11px; 
-          color: var(--text-muted); 
-        }
+        .session-info { flex: 1; min-width: 0; }
+        .session-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .session-date { font-size: 11px; color: var(--text-muted); }
 
         .sidebar-footer {
           border-top: 1px solid var(--border-color);
@@ -682,142 +641,116 @@ export default function Home() {
         }
 
         /* ============================================================
-           MAIN HEADER — Only hamburger menu now
+           MAIN HEADER — Contains hamburger + tabs on mobile
            ============================================================ */
         .main-header {
           display: flex;
-          justify-content: flex-start;
           align-items: center;
-          margin-bottom: 0;
+          gap: 12px;
+          margin-bottom: 16px;
           min-height: 40px;
+          flex-wrap: wrap;
+          flex-shrink: 0;
         }
 
-        .header-actions {
+        .header-left {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 12px;
+          flex-shrink: 0;
         }
-        .header-actions .theme-btn {
-          padding: 6px 14px;
-          border-radius: var(--radius-full);
-          border: 1px solid var(--border-color);
-          background: transparent;
-          color: var(--text-secondary);
-          cursor: pointer;
-          font-size: 13px;
-          font-weight: 450;
-          transition: all 0.2s;
-          font-family: var(--font);
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .header-actions .theme-btn:hover {
-          background: var(--bg-hover);
-          color: var(--text-primary);
-          border-color: var(--border-light);
-        }
-        .header-actions .theme-btn .icon { font-size: 14px; }
 
         /* ============================================================
-           TABS — Clean with underline indicator
+           TABS — Now inside main-header - OVERRIDES GLOBAL CSS
            ============================================================ */
-        .tabs {
-          display: flex;
-          gap: 0;
-          background: transparent;
-          padding: 0;
-          border-radius: 0;
-          border: none;
-          border-bottom: 1px solid var(--border-color);
-          margin-bottom: 16px;
-          transition: border-color 0.3s ease;
-          flex-shrink: 0;
-          position: relative;
+        .main-header .tabs {
+          display: flex !important;
+          gap: 0 !important;
+          background: transparent !important;
+          padding: 0 !important;
+          border-radius: 0 !important;
+          border: none !important;
+          border-bottom: 1px solid var(--border-color) !important;
+          transition: border-color 0.3s ease !important;
+          flex: 1 !important;
+          min-width: 0 !important;
+          overflow-x: auto !important;
+          -webkit-overflow-scrolling: touch !important;
+          scrollbar-width: none !important;
+          flex-direction: row !important;
+          margin-bottom: 0 !important;
+        }
+        .main-header .tabs::-webkit-scrollbar {
+          display: none !important;
         }
 
-        .tab-btn {
-          flex: none;
-          padding: 10px 20px;
-          border: none;
-          border-radius: 0;
-          font-size: 14px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.25s ease;
-          background: transparent;
-          color: var(--text-secondary);
-          font-family: var(--font);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          position: relative;
-          padding-bottom: 12px;
+        .main-header .tab-btn {
+          flex: none !important;
+          padding: 10px 20px !important;
+          border: none !important;
+          border-radius: 0 !important;
+          font-size: 14px !important;
+          font-weight: 500 !important;
+          cursor: pointer !important;
+          transition: all 0.25s ease !important;
+          background: transparent !important;
+          color: var(--text-secondary) !important;
+          font-family: var(--font) !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 8px !important;
+          position: relative !important;
+          padding-bottom: 12px !important;
+          white-space: nowrap !important;
+          box-shadow: none !important;
+          width: auto !important;
         }
 
-        .tab-btn:hover { 
-          color: var(--text-primary);
-          background: transparent;
+        .main-header .tab-btn:hover { 
+          color: var(--text-primary) !important;
+          background: transparent !important;
         }
 
-        .tab-btn.active {
-          color: var(--text-primary);
-          background: transparent;
-          box-shadow: none;
+        .main-header .tab-btn.active {
+          color: var(--text-primary) !important;
+          background: transparent !important;
+          box-shadow: none !important;
         }
 
         /* Underline indicator */
-        .tab-btn::after {
-          content: '';
-          position: absolute;
-          bottom: 0;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 0;
-          height: 2px;
-          background: #ffffff;
-          transition: width 0.3s ease;
-          border-radius: 2px;
+        .main-header .tab-btn::after {
+          content: '' !important;
+          position: absolute !important;
+          bottom: 0 !important;
+          left: 50% !important;
+          transform: translateX(-50%) !important;
+          width: 0 !important;
+          height: 2px !important;
+          background: #ffffff !important;
+          transition: width 0.3s ease !important;
+          border-radius: 2px !important;
         }
 
-        .app.light .tab-btn::after {
-          background: #1a1a24;
+        .app.light .main-header .tab-btn::after {
+          background: #1a1a24 !important;
         }
 
-        .tab-btn.active::after {
-          width: 60%;
+        .main-header .tab-btn.active::after {
+          width: 60% !important;
         }
 
-        .tab-btn .icon { 
-          font-size: 16px; 
-          font-weight: 400; 
-          opacity: 0.6;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+        /* Remove tab icons */
+        .main-header .tab-btn .icon {
+          display: none !important;
         }
 
-        .tab-btn .tab-icon svg {
-          width: 18px;
-          height: 18px;
-          stroke: currentColor;
-        }
-
-        .tab-btn.active .icon { 
-          opacity: 1; 
-        }
-
-        .tab-btn.active .tab-icon svg {
-          stroke: var(--text-primary);
-        }
-
-        .tab-btn .icon-label {
-          font-size: 14px;
+        .main-header .tab-btn .icon-label {
+          font-size: 14px !important;
         }
 
         /* ============================================================
-           DEVOTION CARD
+           DEVOTION CARD - Removed hover effect
            ============================================================ */
         .devotion-card {
           background: var(--bg-card);
@@ -827,7 +760,6 @@ export default function Home() {
           border: 1px solid var(--border-color);
           transition: all 0.25s;
         }
-        
         .card-header {
           display: flex;
           justify-content: space-between;
@@ -995,7 +927,7 @@ export default function Home() {
         }
 
         /* ============================================================
-           CHAT — Welcome Screen + Messages
+           CHAT — Fixed layout with scrolling messages only
            ============================================================ */
         .chat-container {
           background: var(--bg-card);
@@ -1005,10 +937,10 @@ export default function Home() {
           display: flex;
           flex-direction: column;
           flex: 1;
-          height: calc(100vh - 120px);
           min-height: 0;
           transition: background 0.3s ease, border-color 0.3s ease;
         }
+        
         .chat-messages {
           flex: 1;
           overflow-y: auto;
@@ -1017,6 +949,7 @@ export default function Home() {
           transition: background 0.3s ease;
           display: flex;
           flex-direction: column;
+          min-height: 0;
         }
 
         /* Welcome Screen */
@@ -1028,6 +961,7 @@ export default function Home() {
           justify-content: center;
           text-align: center;
           padding: 40px 20px;
+          min-height: 300px;
         }
         .welcome-screen .welcome-icon {
           font-size: 64px;
@@ -1166,6 +1100,7 @@ export default function Home() {
           transition: all 0.2s;
           font-family: var(--font);
           white-space: nowrap;
+          flex-shrink: 0;
         }
         .send-btn:hover:not(:disabled) {
           background: #6d28d9;
@@ -1203,163 +1138,265 @@ export default function Home() {
         }
 
         /* ============================================================
-           MOBILE RESPONSIVE
+           MOBILE RESPONSIVE - OVERRIDES GLOBAL CSS
            ============================================================ */
         @media (max-width: 768px) {
-          .hamburger-btn { display: flex; }
+          .hamburger-btn { 
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 2px !important;
+            margin: 0 !important;
+          }
           
           .sidebar {
-            position: fixed;
-            left: 0;
-            top: 0;
-            height: 100vh;
-            transform: translateX(-100%);
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            height: 100vh !important;
+            transform: translateX(-100%) !important;
             width: 280px !important;
-            z-index: 100;
-            background: var(--bg-primary);
-            border-right: 1px solid var(--border-color);
-            transition: transform 0.3s ease;
-            overflow-y: auto;
-            padding: 16px 12px;
+            z-index: 100 !important;
+            background: var(--bg-primary) !important;
+            border-right: 1px solid var(--border-color) !important;
+            transition: transform 0.3s ease !important;
+            overflow-y: auto !important;
+            padding: 16px 12px !important;
           }
-          .sidebar.open { transform: translateX(0); }
-          .sidebar.closed { transform: translateX(-100%); }
+          .sidebar.open { transform: translateX(0) !important; }
+          .sidebar.closed { transform: translateX(-100%) !important; }
           
-          .sidebar-close { display: flex; }
-          .sidebar-overlay.open { display: block; opacity: 1; }
+          .sidebar-close { display: flex !important; }
+          .sidebar-overlay.open { display: block !important; opacity: 1 !important; }
           
           .main { 
-            padding: 16px 16px 0; 
-            height: 95vh; 
-            overflow: hidden; 
-          }
-          .main-header .title { font-size: 18px; }
-          
-          .tabs {
-            display: flex;
-            gap: 0;
-            background: transparent;
-            padding: 0;
-            border-radius: 0;
-            border: none;
-            border-bottom: 1px solid var(--border-color);
-            margin-bottom: 12px;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
+            padding: 12px 12px 0 !important; 
+            height: 100vh !important; 
+            overflow: hidden !important; 
           }
           
-          .tab-btn {
-            flex: none;
-            padding: 10px 16px;
-            font-size: 13px;
-            padding-bottom: 12px;
-            white-space: nowrap;
+          .main-header { 
+            display: flex !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            gap: 6px !important;
+            margin-bottom: 4px !important;
+            min-height: 36px !important;
+            flex-wrap: nowrap !important;
+            width: 100% !important;
+            padding: 0 !important;
+            flex-shrink: 0 !important;
           }
           
-          .tab-btn .icon-label {
-            font-size: 13px;
+          .header-left {
+            flex-shrink: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            height: 100% !important;
           }
           
-          .tab-btn.reels-tab {
-            padding: 10px 16px;
-          }
-          
-          .devotion-card { padding: 14px; }
-          .card-title { font-size: 17px; }
-          
-          .chat-container { 
-            flex: 1;
-            min-height: 0;
-            height: 100%;
-          }
-          .chat-messages { padding: 12px; }
-          
-          /* Chat Input — Mobile */
-          .chat-input { 
-            padding: 8px 12px;
-            flex-shrink: 0;
-            gap: 8px;
+          /* OVERRIDE GLOBAL .tabs styles */
+          .main-header .tabs {
+            flex: 1 !important;
+            min-width: 0 !important;
             display: flex !important;
             flex-direction: row !important;
-            align-items: center;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            gap: 2px !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            -webkit-overflow-scrolling: touch !important;
+            scrollbar-width: none !important;
+            border-bottom: none !important;
+            padding: 0 !important;
+            flex-wrap: nowrap !important;
+            height: 100% !important;
+            background: transparent !important;
+            border-radius: 0 !important;
+            margin-bottom: 0 !important;
           }
-          .chat-input input {
-            flex: 1;
-            padding: 10px 14px;
-            font-size: 14px;
-            min-width: 0;
-          }
-          .send-btn {
-            padding: 10px 14px;
-            font-size: 13px;
-            white-space: nowrap;
-            width: auto;
+          .main-header .tabs::-webkit-scrollbar {
+            display: none !important;
           }
           
-          .chat-message .bubble { max-width: 90%; font-size: 14px; }
-          .welcome-screen .welcome-title { font-size: 22px; }
-          .welcome-screen .welcome-icon { font-size: 48px; }
+          .main-header .tab-btn {
+            flex: 0 0 auto !important;
+            padding: 4px 8px !important;
+            font-size: 12px !important;
+            padding-bottom: 6px !important;
+            white-space: nowrap !important;
+            min-width: auto !important;
+            border-bottom: none !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            height: auto !important;
+            line-height: 1.2 !important;
+            background: transparent !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+          }
+          
+          .main-header .tab-btn .icon-label {
+            font-size: 12px !important;
+            white-space: nowrap !important;
+            line-height: 1.2 !important;
+          }
+          
+          .main-header .tab-btn::after {
+            display: none !important;
+          }
+          
+          .main-header .tab-btn.active {
+            border-bottom: 2px solid #ffffff !important;
+            background: transparent !important;
+            box-shadow: none !important;
+          }
+          .app.light .main-header .tab-btn.active {
+            border-bottom: 2px solid #1a1a24 !important;
+          }
+          
+          .devotion-card { padding: 14px !important; }
+          .card-title { font-size: 17px !important; }
+          
+          /* CHAT - Fixed layout on mobile */
+          .chat-container { 
+            flex: 1 !important;
+            min-height: 0 !important;
+            height: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+          }
+          
+          .chat-messages { 
+            flex: 1 !important;
+            overflow-y: auto !important;
+            padding: 12px !important;
+            min-height: 0 !important;
+            height: auto !important;
+          }
+          
+          .chat-input { 
+            padding: 8px 12px !important;
+            flex-shrink: 0 !important;
+            gap: 8px !important;
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            background: var(--bg-card) !important;
+            border-top: 1px solid var(--border-color) !important;
+          }
+          .chat-input input {
+            flex: 1 !important;
+            padding: 10px 14px !important;
+            font-size: 14px !important;
+            min-width: 0 !important;
+          }
+          .send-btn {
+            padding: 10px 14px !important;
+            font-size: 13px !important;
+            white-space: nowrap !important;
+            width: auto !important;
+            flex-shrink: 0 !important;
+          }
+          
+          /* Welcome screen on mobile */
+          .welcome-screen {
+            min-height: 200px !important;
+            padding: 20px 16px !important;
+          }
+          .welcome-screen .welcome-title { font-size: 22px !important; }
+          .welcome-screen .welcome-icon { font-size: 48px !important; }
+          .welcome-screen .welcome-subtitle { font-size: 14px !important; }
 
           .action-buttons {
-            gap: 6px;
+            gap: 6px !important;
           }
           .action-btn {
-            font-size: 12px;
-            padding: 5px 10px;
+            font-size: 12px !important;
+            padding: 5px 10px !important;
           }
           .action-btn .btn-icon {
-            width: 16px;
-            height: 16px;
+            width: 16px !important;
+            height: 16px !important;
           }
         }
 
         @media (max-width: 480px) {
           .main { 
-            padding: 12px 12px 0; 
-            height: 95vh; 
-            overflow: hidden; 
-          }
-          .main-header { flex-direction: column; align-items: flex-start; gap: 12px; }
-          .header-actions { width: 100%; justify-content: flex-start; }
-          
-          .tabs {
-            flex-direction: row;
-            overflow-x: auto;
+            padding: 10px 10px 0 !important; 
+            height: 100vh !important; 
+            overflow: hidden !important; 
           }
           
-          .tab-btn {
-            padding: 8px 12px;
-            font-size: 12px;
-            padding-bottom: 10px;
+          .main-header { 
+            gap: 4px !important;
+            min-height: 32px !important;
+            margin-bottom: 2px !important;
           }
           
-          .tab-btn .icon-label {
-            font-size: 12px;
+          .hamburger-btn {
+            width: 24px !important;
+            height: 24px !important;
+            padding: 2px !important;
+          }
+          .hamburger-line {
+            width: 16px !important;
+            height: 1.5px !important;
           }
           
-          .tab-btn .tab-icon svg {
-            width: 16px;
-            height: 16px;
+          .main-header .tabs {
+            gap: 1px !important;
           }
           
-          .devotion-card { padding: 12px; }
-          .card-title { font-size: 16px; }
-          .card-scripture { font-size: 13px; }
-          .card-story { font-size: 14px; }
+          .main-header .tab-btn {
+            padding: 2px 6px !important;
+            font-size: 10px !important;
+            padding-bottom: 4px !important;
+          }
           
+          .main-header .tab-btn .icon-label {
+            font-size: 10px !important;
+          }
+          
+          .devotion-card { padding: 12px !important; }
+          .card-title { font-size: 16px !important; }
+          .card-scripture { font-size: 13px !important; }
+          .card-story { font-size: 14px !important; }
+          
+          /* CHAT - Fixed layout on small mobile */
           .chat-container { 
-            flex: 1;
-            min-height: 0;
-            height: 100%;
+            flex: 1 !important;
+            min-height: 0 !important;
+            height: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
           }
-          .chat-messages { padding: 10px; }
+          .chat-messages { 
+            padding: 10px !important;
+            flex: 1 !important;
+            overflow-y: auto !important;
+            min-height: 0 !important;
+          }
           .chat-input { 
-            padding: 6px 10px;
-            flex-shrink: 0;
+            padding: 6px 10px !important;
+            flex-shrink: 0 !important;
           }
-          .chat-message .bubble { max-width: 92%; font-size: 13px; }
-          .welcome-screen .welcome-title { font-size: 20px; }
-          .welcome-screen .welcome-subtitle { font-size: 14px; }
+          .chat-input input {
+            padding: 8px 12px !important;
+            font-size: 13px !important;
+          }
+          .send-btn {
+            padding: 8px 12px !important;
+            font-size: 12px !important;
+          }
+          .chat-message .bubble { max-width: 92% !important; font-size: 13px !important; }
+          .welcome-screen .welcome-title { font-size: 20px !important; }
+          .welcome-screen .welcome-subtitle { font-size: 14px !important; }
         }
       `}</style>
 
@@ -1449,64 +1486,64 @@ export default function Home() {
               <span className="hamburger-line"></span>
             </button>
           </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="tabs">
-          <button
-            onClick={() => {
-              setActiveTab('devotions');
-              setShowReels(false);
-              if (!selectedDevotionId) setSelectedDevotionId('daily');
-            }}
-            className={`tab-btn ${activeTab === 'devotions' ? 'active' : ''}`}
-          >
-            <span className="icon tab-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 6h16v14H4z" />
-                <path d="M4 6V4h16v2" />
-                <path d="M8 10h8" />
-                <path d="M8 14h6" />
-                <path d="M8 18h4" />
-                <path d="M12 6v14" />
-              </svg>
-            </span>
-            <span className="icon-label">Devotionals</span>
-          </button>
+          {/* Tabs now inside main-header */}
+          <div className="tabs">
+            <button
+              onClick={() => {
+                setActiveTab('devotions');
+                setShowReels(false);
+                if (!selectedDevotionId) setSelectedDevotionId('daily');
+              }}
+              className={`tab-btn ${activeTab === 'devotions' ? 'active' : ''}`}
+            >
+              <span className="icon tab-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 6h16v14H4z" />
+                  <path d="M4 6V4h16v2" />
+                  <path d="M8 10h8" />
+                  <path d="M8 14h6" />
+                  <path d="M8 18h4" />
+                  <path d="M12 6v14" />
+                </svg>
+              </span>
+              <span className="icon-label">Devotionals</span>
+            </button>
 
-          <button
-            onClick={() => {
-              setActiveTab('chat');
-              setShowReels(false);
-            }}
-            className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
-          >
-            <span className="icon tab-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            </span>
-            <span className="icon-label">Paul (Bible Assistant)</span>
-          </button>
+            <button
+              onClick={() => {
+                setActiveTab('chat');
+                setShowReels(false);
+              }}
+              className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
+            >
+              <span className="icon tab-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              </span>
+              <span className="icon-label">Paul (Bible Assistant)</span>
+            </button>
 
-          <button
-            onClick={() => {
-              setShowReels(true);
-              setActiveTab('reels');
-            }}
-            className={`tab-btn reels-tab ${activeTab === 'reels' ? 'active' : ''}`}
-          >
-            <span className="icon tab-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="2" width="20" height="20" rx="2.18" />
-                <line x1="8" y1="2" x2="8" y2="22" />
-                <line x1="16" y1="2" x2="16" y2="22" />
-                <line x1="2" y1="8" x2="22" y2="8" />
-                <line x1="2" y1="16" x2="22" y2="16" />
-              </svg>
-            </span>
-            <span className="icon-label">Message Reels</span>
-          </button>
+            <button
+              onClick={() => {
+                setShowReels(true);
+                setActiveTab('reels');
+              }}
+              className={`tab-btn reels-tab ${activeTab === 'reels' ? 'active' : ''}`}
+            >
+              <span className="icon tab-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="2" width="20" height="20" rx="2.18" />
+                  <line x1="8" y1="2" x2="8" y2="22" />
+                  <line x1="16" y1="2" x2="16" y2="22" />
+                  <line x1="2" y1="8" x2="22" y2="8" />
+                  <line x1="2" y1="16" x2="22" y2="16" />
+                </svg>
+              </span>
+              <span className="icon-label">Message Reels</span>
+            </button>
+          </div>
         </div>
 
         {/* Devotionals */}
