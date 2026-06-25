@@ -22,7 +22,6 @@ export default function ReelsFeed({ onClose }) {
 
                 if (data.success && data.videos.length > 0) {
                     setVideos(data.videos);
-                    // Load YouTube API
                     loadYouTubeAPI();
                 } else {
                     setError('No videos found');
@@ -37,7 +36,6 @@ export default function ReelsFeed({ onClose }) {
         loadVideos();
     }, []);
 
-    // Load YouTube API
     const loadYouTubeAPI = () => {
         if (window.YT && window.YT.Player) {
             setApiReady(true);
@@ -54,10 +52,8 @@ export default function ReelsFeed({ onClose }) {
         };
     };
 
-    // Initialize players when API is ready and videos are loaded
     useEffect(() => {
         if (apiReady && videos.length > 0) {
-            // Small delay to ensure DOM is ready
             setTimeout(() => {
                 initializePlayers();
             }, 100);
@@ -90,7 +86,11 @@ export default function ReelsFeed({ onClose }) {
                                 }
                             },
                             onStateChange: (event) => {
-                                // Handle state changes if needed
+                                // When video ends, restart from beginning
+                                if (event.data === window.YT.PlayerState.ENDED) {
+                                    event.target.seekTo(0);
+                                    event.target.playVideo();
+                                }
                             }
                         }
                     });
@@ -102,11 +102,13 @@ export default function ReelsFeed({ onClose }) {
         });
     };
 
-    // Safe play function with error handling
+    // Safe play function - starts from beginning
     const safePlayVideo = (videoId) => {
         try {
             const player = playersRef.current[videoId];
             if (player && typeof player.playVideo === 'function') {
+                // Seek to beginning before playing
+                player.seekTo(0);
                 player.playVideo();
             } else {
                 console.warn('Player not ready for video:', videoId);
@@ -116,7 +118,7 @@ export default function ReelsFeed({ onClose }) {
         }
     };
 
-    // Safe pause function with error handling
+    // Safe pause function
     const safePauseVideo = (videoId) => {
         try {
             const player = playersRef.current[videoId];
@@ -130,7 +132,7 @@ export default function ReelsFeed({ onClose }) {
         }
     };
 
-    // Safe destroy function with error handling
+    // Safe destroy function
     const safeDestroyPlayer = (videoId) => {
         try {
             const player = playersRef.current[videoId];
@@ -142,7 +144,7 @@ export default function ReelsFeed({ onClose }) {
         }
     };
 
-    // Touch handlers for swipe detection
+    // Touch handlers
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -181,7 +183,7 @@ export default function ReelsFeed({ onClose }) {
         };
     }, [videos.length, currentIndex]);
 
-    // Wheel handler for desktop
+    // Wheel handler
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -221,7 +223,7 @@ export default function ReelsFeed({ onClose }) {
             isTransitioning.current = true;
             const newIndex = currentIndex + 1;
             
-            // Pause current video safely
+            // Pause current video
             const currentVideo = videos[currentIndex];
             if (currentVideo && playersRef.current[currentVideo.id]) {
                 safePauseVideo(currentVideo.id);
@@ -240,7 +242,7 @@ export default function ReelsFeed({ onClose }) {
                 }
             }
 
-            // Play new video after a delay
+            // Play new video from beginning
             setTimeout(() => {
                 const nextVideo = videos[newIndex];
                 if (nextVideo && playersRef.current[nextVideo.id]) {
@@ -256,7 +258,7 @@ export default function ReelsFeed({ onClose }) {
             isTransitioning.current = true;
             const newIndex = currentIndex - 1;
             
-            // Pause current video safely
+            // Pause current video
             const currentVideo = videos[currentIndex];
             if (currentVideo && playersRef.current[currentVideo.id]) {
                 safePauseVideo(currentVideo.id);
@@ -275,7 +277,7 @@ export default function ReelsFeed({ onClose }) {
                 }
             }
 
-            // Play new video after a delay
+            // Play new video from beginning
             setTimeout(() => {
                 const prevVideo = videos[newIndex];
                 if (prevVideo && playersRef.current[prevVideo.id]) {
