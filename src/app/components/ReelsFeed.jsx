@@ -527,7 +527,7 @@ export default function ReelsFeed({ onClose }) {
                                 <h3 className="reels-feed-title">{video.title}</h3>
                             </div>
                             {index === currentIndex && showPlayIcon && (
-                                <div className="reels-play-icon">▶</div>
+                                <div className="reels-play-icon"></div>
                             )}
                         </div>
                     </div>
