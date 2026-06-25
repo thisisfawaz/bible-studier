@@ -55,26 +55,75 @@ function getTodayDevotion(devotions) {
 // Format the story with proper paragraph breaks
 function formatStory(story) {
   if (!story) return '';
-  
-  // First, split by any newlines (both \n\n and \n)
   const paragraphs = story.split(/\n\n|\n/).filter(p => p.trim());
-  
-  // Join with double newlines for proper paragraph spacing
   return paragraphs.join('\n\n');
 }
 
 export async function GET() {
-  const devotions = getDevotions();
-  const today = getTodayDate();
-  const todayDevotion = getTodayDevotion(devotions);
+  try {
+    const devotions = getDevotions();
+    const today = getTodayDate();
+    let todayDevotion = getTodayDevotion(devotions);
+    
+    // If no devotion for today, generate one
+    if (!todayDevotion) {
+      console.log(`🔄 Generating devotion for ${today}`);
+      
+      try {
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+        const genResponse = await fetch(`${baseUrl}/api/generate-devotion`, {
+          method: 'POST'
+        });
+        const genData = await genResponse.json();
+        
+        if (genData.success) {
+          const formattedDevotion = {
+            ...genData.devotion,
+            story: formatStory(genData.devotion.story || ''),
+            date: genData.devotion.date || today
+          };
+          
+          // Remove any existing devotion with the same date
+          const filteredDevotions = devotions.filter(d => d.date !== today);
+          filteredDevotions.push(formattedDevotion);
+          
+          // Save (keeps last 10)
+          const saved = saveDevotions(filteredDevotions);
+          todayDevotion = saved.find(d => d.date === today);
+          
+          console.log(`✅ Devotion generated for ${today}`);
+          console.log(`📖 Title: "${todayDevotion?.title}"`);
+        } else {
+          console.error('Failed to generate devotion:', genData.error);
+          if (devotions.length > 0) {
+            todayDevotion = devotions[devotions.length - 1];
+          }
+        }
+      } catch (genError) {
+        console.error('Error generating devotion:', genError);
+        if (devotions.length > 0) {
+          todayDevotion = devotions[devotions.length - 1];
+        }
+      }
+    } else {
+      console.log(`✅ Devotion already exists for ${today}: "${todayDevotion?.title}"`);
+    }
 
-  return NextResponse.json({
-    success: true,
-    today: todayDevotion,
-    recent: devotions.slice(-MAX_DEVOTIONS).reverse(),
-    count: devotions.length,
-    max: MAX_DEVOTIONS
-  });
+    return NextResponse.json({
+      success: true,
+      today: todayDevotion || null,
+      recent: devotions.slice(-MAX_DEVOTIONS).reverse(),
+      count: devotions.length,
+      max: MAX_DEVOTIONS
+    });
+
+  } catch (error) {
+    console.error('Error in GET:', error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(request) {
@@ -90,25 +139,20 @@ export async function POST(request) {
 
     let devotions = getDevotions();
     
-    // Format the story with proper paragraph breaks
     const formattedDevotion = {
       ...devotion,
       story: formatStory(devotion.story || '')
     };
     
-    // Check if today already has a devotion
     const today = getTodayDate();
     const existingIndex = devotions.findIndex(d => d.date === today);
     
     if (existingIndex !== -1) {
-      // Replace today's devotion
       devotions[existingIndex] = { ...formattedDevotion, date: today };
     } else {
-      // Add new devotion
       devotions.push({ ...formattedDevotion, date: today });
     }
     
-    // Save (automatically keeps last 10)
     const saved = saveDevotions(devotions);
     
     return NextResponse.json({
@@ -120,6 +164,7 @@ export async function POST(request) {
     });
     
   } catch (error) {
+    console.error('Error in POST:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

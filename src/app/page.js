@@ -118,7 +118,7 @@ function renderMessage(text) {
     
     // Regular paragraph
     return (
-      <p key={index} className="msg-paragraph" style={{ marginBottom: '25px', lineHeight: '1.8' }}>
+      <p key={index} className="msg-paragraph" style={{ marginBottom: '15px', lineHeight: '1.8' }}>
         {renderInlineContent(paragraph)}
       </p>
     );
@@ -191,7 +191,7 @@ export default function Home() {
         const response = await fetch('/api/devotion');
         const data = await response.json();
         if (data.success) {
-          setDailyDevotion(data.devotion);
+          setDailyDevotion(data.today);
           if (selectedDevotionId === null || selectedDevotionId === devotions[0]?.id) {
             const params = new URLSearchParams(window.location.search);
             const devotionParam = params.get('devotion');
@@ -608,8 +608,8 @@ export default function Home() {
           padding: 8px 12px;
           border-radius: 8px !important;
           border: 1px solid var(--border-color);
-          background: transparent;
-          color: var(--text-secondary);
+          background: #1a1a1f;
+          color: #ffffff;
           font-size: 13px;
           font-weight: 450;
           cursor: pointer;
@@ -621,6 +621,15 @@ export default function Home() {
           background: var(--bg-hover);
           color: var(--text-primary);
           border-color: var(--border-light);
+        }
+
+        .app.light .new-chat-btn {
+          background: #141414;
+          color: #ffffff;
+          border-color: #a5a5a5;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+          padding: 10px 16px;
+          font-weight: 500;
         }
 
         .sidebar-sessions {
@@ -925,28 +934,34 @@ export default function Home() {
         }
         .app.light .card-scripture {
           background: rgba(0,0,0,0.02);
-          border-left: 3px solid #7c22fe;
+          border-left: 3px solid #181818 !important;
           color: #4a4a5e;
         }
         
         /* Devotional story paragraph spacing */
         .card-story .story-paragraph {
-          margin-bottom: 40px !important;
+          margin-bottom: 15px !important;
           line-height: 1.8 !important;
+          color:#ffffff !important;
         }
         .card-story .story-paragraph:last-child {
           margin-bottom: 0 !important;
         }
         
+        .app.light .card-story .story-paragraph {
+          color:#222222 !important;
+        }
+
         .prayer-section {
           background: rgba(255,255,255,0.02);
           border-left: 3px solid #ffffff;
           padding: 12px 16px;
           border-radius: 0 6px 6px 0;
           margin-top: 16px;
+          margin-bottom: 30px;
         }
         .app.light .prayer-section {
-          border-left: 3px solid #7c22fe;
+          border-left: 3px solid #181818;
           background: rgba(0,0,0,0.02);
         }
         .prayer-title {
@@ -957,7 +972,7 @@ export default function Home() {
           letter-spacing: 0.02em;
         }
         .app.light .prayer-title {
-          color: #7c22fe;
+          color: #181818 !important;
         }
         .prayer-text {
           color: #f7f4ef;
@@ -1142,7 +1157,7 @@ export default function Home() {
         }
         .chat-message.user .bubble .timestamp { 
           text-align: right;
-          color: #a3a3a3 !important;
+          color: #ffffff !important;
         }
         .chat-message .bubble .sender {
           font-size: 11px;
@@ -1286,7 +1301,7 @@ export default function Home() {
         .app.light .btn-upgrade {
           background: #ffffff;
           color: #1a1a24;
-          border-color: #d0d0d8;
+          border-color: #a5a5a5;
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
           padding: 10px 16px;
           font-weight: 500;
@@ -1328,8 +1343,8 @@ export default function Home() {
         }
 
         .app.light .chat-message.user .bubble {
-          background: #e8e8ed !important;
-          color: #1a1a24 !important;
+          background: #141414 !important;
+          color: #ffffff !important;
         }
 
         .app.light .chat-input {
@@ -1340,15 +1355,15 @@ export default function Home() {
         .app.light .chat-input input {
           background: #f5f5f8 !important;
           color: #1a1a24 !important;
-          border-color: #e0e0e8 !important;
+          border-color: #a1a1a1 !important;
         }
 
         .app.light .chat-input input::placeholder {
-          color: #8a8a9e !important;
+          color: #484848 !important;
         }
 
         .app.light .send-btn {
-          background: #4a4a4e !important;
+          background: #141414 !important;
           color: #ffffff !important;
         }
 
@@ -1365,7 +1380,12 @@ export default function Home() {
         }
 
         .app.light .chat-message.assistant .bubble .timestamp {
-          color: #000000 !important;
+          color: #353535 !important;
+          opacity: 1 !important;
+        }
+
+        .app.light .chat-message.user .bubble .timestamp {
+          color: #b5b5b5 !important;
           opacity: 1 !important;
         }
 
@@ -1765,13 +1785,19 @@ export default function Home() {
       <aside className={`sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
         {/* Title and Close button in same row */}
         <div className="sidebar-top-row">
-          <a href="/" className="sidebar-app-title" onClick={(e) => {
-            e.preventDefault();
-            setActiveTab('devotions');
-            setShowReels(false);
-            if (!selectedDevotionId) setSelectedDevotionId('daily');
-            if (window.innerWidth < 768) setIsSidebarOpen(false);
-          }}>
+          <a 
+            href="/" 
+            className="sidebar-app-title" 
+            onClick={(e) => {
+              e.preventDefault();
+              // Clear URL parameters
+              const url = new URL(window.location);
+              url.searchParams.delete('devotion');
+              window.history.replaceState({}, '', url);
+              // Force full page reload to homepage
+              window.location.href = '/';
+            }}
+          >
             <span className="sidebar-bible-icon">✝</span>
             <span className="sidebar-title-text">Bible Studier</span>
           </a>
@@ -1810,7 +1836,7 @@ export default function Home() {
                 >
                   <span className="icon">⭐</span>
                   <div className="session-info">
-                    <div className="session-title">Today's Devotion</div>
+                    <div className="session-title">{dailyDevotion.title || "Today's Devotion"}</div>
                     <div className="session-date">{dailyDevotion.date || new Date().toLocaleDateString()}</div>
                   </div>
                 </div>

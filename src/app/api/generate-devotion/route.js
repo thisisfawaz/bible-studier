@@ -90,7 +90,6 @@ Make the story inspiring and faith-based. Use a real historical or modern faith 
         devotion = JSON.parse(content);
       }
     } catch (parseError) {
-      // Fallback parsing
       const lines = content.split('\n').filter(line => line.trim());
       devotion = {
         title: lines.find(l => l.toLowerCase().includes('title'))?.replace(/^.*?title[:\s]*/i, '').trim() || `${category} Devotion`,
@@ -111,6 +110,7 @@ Make the story inspiring and faith-based. Use a real historical or modern faith 
     });
 
   } catch (error) {
+    console.error('Generate Devotion Error:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

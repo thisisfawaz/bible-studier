@@ -289,6 +289,7 @@ export default function ReelsFeed({ onClose }) {
         };
 
         const handleTouchMove = (e) => {
+            // Prevent default to avoid scrolling
             e.preventDefault();
         };
 
@@ -301,6 +302,7 @@ export default function ReelsFeed({ onClose }) {
             const diffX = touchStartX.current - touchEndX;
             const timeDiff = Date.now() - touchStartTime.current;
 
+            // Check if it's a tap (small movement, quick touch)
             if (Math.abs(diffY) < 20 && Math.abs(diffX) < 20 && timeDiff < 300) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -308,7 +310,12 @@ export default function ReelsFeed({ onClose }) {
                 return;
             }
 
+            // It's a swipe - check if vertical enough
             if (Math.abs(diffY) < 30) return;
+
+            // Prevent default to avoid any page scroll
+            e.preventDefault();
+            e.stopPropagation();
 
             if (diffY > 0) {
                 goToNext();
@@ -383,11 +390,13 @@ export default function ReelsFeed({ onClose }) {
             isTransitioning.current = true;
             const newIndex = currentIndex + 1;
             
+            // Pause current video
             const currentVideo = videos[currentIndex];
             if (currentVideo && playersRef.current[currentVideo.id]) {
                 safePauseVideo(currentVideo.id);
             }
 
+            // Update index
             setCurrentIndex(newIndex);
             setIsPaused(false);
             setShowPlayIcon(false);
@@ -395,10 +404,11 @@ export default function ReelsFeed({ onClose }) {
                 clearTimeout(iconTimeoutRef.current);
             }
 
+            // Scroll to the new video
             const container = containerRef.current;
             if (container) {
                 const children = container.children;
-                if (children[newIndex]) {
+                if (children && children[newIndex]) {
                     container.scrollTo({
                         top: children[newIndex].offsetTop,
                         behavior: 'auto'
@@ -406,13 +416,17 @@ export default function ReelsFeed({ onClose }) {
                 }
             }
 
+            // Play the new video after scroll
             setTimeout(() => {
                 const nextVideo = videos[newIndex];
                 if (nextVideo && playersRef.current[nextVideo.id]) {
                     safePlayVideo(nextVideo.id);
                 }
                 isTransitioning.current = false;
-            }, 200);
+            }, 250);
+        } else {
+            // If at the end, reset transition lock
+            isTransitioning.current = false;
         }
     };
 
@@ -421,11 +435,13 @@ export default function ReelsFeed({ onClose }) {
             isTransitioning.current = true;
             const newIndex = currentIndex - 1;
             
+            // Pause current video
             const currentVideo = videos[currentIndex];
             if (currentVideo && playersRef.current[currentVideo.id]) {
                 safePauseVideo(currentVideo.id);
             }
 
+            // Update index
             setCurrentIndex(newIndex);
             setIsPaused(false);
             setShowPlayIcon(false);
@@ -433,10 +449,11 @@ export default function ReelsFeed({ onClose }) {
                 clearTimeout(iconTimeoutRef.current);
             }
 
+            // Scroll to the new video
             const container = containerRef.current;
             if (container) {
                 const children = container.children;
-                if (children[newIndex]) {
+                if (children && children[newIndex]) {
                     container.scrollTo({
                         top: children[newIndex].offsetTop,
                         behavior: 'auto'
@@ -444,13 +461,17 @@ export default function ReelsFeed({ onClose }) {
                 }
             }
 
+            // Play the new video after scroll
             setTimeout(() => {
                 const prevVideo = videos[newIndex];
                 if (prevVideo && playersRef.current[prevVideo.id]) {
                     safePlayVideo(prevVideo.id);
                 }
                 isTransitioning.current = false;
-            }, 200);
+            }, 250);
+        } else {
+            // If at the beginning, reset transition lock
+            isTransitioning.current = false;
         }
     };
 
@@ -607,7 +628,6 @@ export default function ReelsFeed({ onClose }) {
           touch-action: none;
           -webkit-touch-callout: none;
           -webkit-user-select: none;
-          touch-action: manipulation;
         }
 
         .reels-feed-item {
@@ -630,6 +650,7 @@ export default function ReelsFeed({ onClose }) {
           align-items: center;
           justify-content: center;
           background: #000;
+          pointer-events: none;
         }
 
         .reels-feed-video {
@@ -638,15 +659,12 @@ export default function ReelsFeed({ onClose }) {
           max-width: 400px;
           aspect-ratio: 9 / 16;
           background: #000;
+          pointer-events: none;
         }
 
-        /* Hide YouTube controls */
+        /* Hide YouTube controls - pointer-events: none so YouTube doesn't interfere with swipe */
         .reels-feed-video iframe {
-          pointer-events: auto !important;
-        }
-
-        .reels-feed-video iframe::-webkit-media-controls-enclosure {
-          display: none !important;
+          pointer-events: none !important;
         }
 
         .reels-feed-overlay {
