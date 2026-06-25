@@ -2,9 +2,7 @@ name: Update Reels Playlist
 
 on:
   schedule:
-    # Run every 6 hours
     - cron: '0 */6 * * *'
-  # Manual trigger
   workflow_dispatch:
 
 jobs:
@@ -18,7 +16,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'  # Changed from '20' to '24'
           
       - name: Install dependencies
         run: npm ci
