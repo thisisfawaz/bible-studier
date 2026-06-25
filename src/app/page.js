@@ -636,8 +636,8 @@ export default function Home() {
           transition: background 0.3s ease;
           display: flex;
           flex-direction: column;
-          overflow-y: auto;
-          height: 98vh;
+          overflow: hidden;
+          height: 100vh;
         }
 
         /* ============================================================
@@ -961,7 +961,7 @@ export default function Home() {
           justify-content: center;
           text-align: center;
           padding: 40px 20px;
-          min-height: 300px;
+          min-height: 200px;
         }
         .welcome-screen .welcome-icon {
           font-size: 64px;
@@ -1141,6 +1141,11 @@ export default function Home() {
            MOBILE RESPONSIVE - OVERRIDES GLOBAL CSS
            ============================================================ */
         @media (max-width: 768px) {
+          .app {
+            height: 100dvh !important;
+            overflow: hidden !important;
+          }
+          
           .hamburger-btn { 
             display: flex !important;
             align-items: center !important;
@@ -1171,8 +1176,9 @@ export default function Home() {
           
           .main { 
             padding: 12px 12px 0 !important; 
-            height: 100vh !important; 
-            overflow: hidden !important; 
+            height: 100dvh !important;
+            max-height: 100dvh !important;
+            overflow: hidden !important;
           }
           
           .main-header { 
@@ -1277,6 +1283,7 @@ export default function Home() {
             padding: 12px !important;
             min-height: 0 !important;
             height: auto !important;
+            max-height: 100% !important;
           }
           
           .chat-input { 
@@ -1288,12 +1295,14 @@ export default function Home() {
             align-items: center !important;
             background: var(--bg-card) !important;
             border-top: 1px solid var(--border-color) !important;
+            min-height: 50px !important;
           }
           .chat-input input {
             flex: 1 !important;
             padding: 10px 14px !important;
             font-size: 14px !important;
             min-width: 0 !important;
+            height: 40px !important;
           }
           .send-btn {
             padding: 10px 14px !important;
@@ -1301,11 +1310,12 @@ export default function Home() {
             white-space: nowrap !important;
             width: auto !important;
             flex-shrink: 0 !important;
+            height: 40px !important;
           }
           
           /* Welcome screen on mobile */
           .welcome-screen {
-            min-height: 200px !important;
+            min-height: 150px !important;
             padding: 20px 16px !important;
           }
           .welcome-screen .welcome-title { font-size: 22px !important; }
@@ -1328,8 +1338,9 @@ export default function Home() {
         @media (max-width: 480px) {
           .main { 
             padding: 10px 10px 0 !important; 
-            height: 100vh !important; 
-            overflow: hidden !important; 
+            height: 100dvh !important;
+            max-height: 100dvh !important;
+            overflow: hidden !important;
           }
           
           .main-header { 
@@ -1381,18 +1392,22 @@ export default function Home() {
             flex: 1 !important;
             overflow-y: auto !important;
             min-height: 0 !important;
+            max-height: 100% !important;
           }
           .chat-input { 
             padding: 6px 10px !important;
             flex-shrink: 0 !important;
+            min-height: 44px !important;
           }
           .chat-input input {
             padding: 8px 12px !important;
             font-size: 13px !important;
+            height: 36px !important;
           }
           .send-btn {
             padding: 8px 12px !important;
             font-size: 12px !important;
+            height: 36px !important;
           }
           .chat-message .bubble { max-width: 92% !important; font-size: 13px !important; }
           .welcome-screen .welcome-title { font-size: 20px !important; }
