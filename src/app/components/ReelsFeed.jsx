@@ -8,11 +8,11 @@ export default function ReelsFeed({ onClose }) {
     const [error, setError] = useState(null);
     const [currentIndex, setCurrentIndex] = useState(0);
     const containerRef = useRef(null);
-    const videoRefs = useRef({});
+    const playersRef = useRef({});
     const touchStartY = useRef(0);
     const touchEndY = useRef(0);
     const isTransitioning = useRef(false);
-    const [isPreloaded, setIsPreloaded] = useState(false);
+    const [apiReady, setApiReady] = useState(false);
 
     useEffect(() => {
         async function loadVideos() {
@@ -22,8 +22,8 @@ export default function ReelsFeed({ onClose }) {
 
                 if (data.success && data.videos.length > 0) {
                     setVideos(data.videos);
-                    // Start preloading after videos are set
-                    setTimeout(() => setIsPreloaded(true), 100);
+                    // Load YouTube API
+                    loadYouTubeAPI();
                 } else {
                     setError('No videos found');
                 }
@@ -37,53 +37,110 @@ export default function ReelsFeed({ onClose }) {
         loadVideos();
     }, []);
 
-    // Pause all videos except the active one
-    const pauseAllVideos = (exceptVideoId) => {
-        Object.keys(videoRefs.current).forEach((videoId) => {
-            if (videoId !== exceptVideoId) {
-                const iframe = videoRefs.current[videoId];
-                if (iframe) {
-                    iframe.contentWindow?.postMessage(
-                        '{"event":"command","func":"pauseVideo","args":""}',
-                        '*'
-                    );
+    // Load YouTube API
+    const loadYouTubeAPI = () => {
+        if (window.YT && window.YT.Player) {
+            setApiReady(true);
+            return;
+        }
+        
+        const tag = document.createElement('script');
+        tag.src = 'https://www.youtube.com/iframe_api';
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        window.onYouTubeIframeAPIReady = () => {
+            setApiReady(true);
+        };
+    };
+
+    // Initialize players when API is ready and videos are loaded
+    useEffect(() => {
+        if (apiReady && videos.length > 0) {
+            // Small delay to ensure DOM is ready
+            setTimeout(() => {
+                initializePlayers();
+            }, 100);
+        }
+    }, [apiReady, videos]);
+
+    const initializePlayers = () => {
+        videos.forEach((video, index) => {
+            const elementId = `player-${video.id}`;
+            const element = document.getElementById(elementId);
+            if (element && !playersRef.current[video.id]) {
+                try {
+                    const player = new window.YT.Player(elementId, {
+                        height: '100%',
+                        width: '100%',
+                        videoId: video.id,
+                        playerVars: {
+                            autoplay: index === 0 ? 1 : 0,
+                            controls: 0,
+                            rel: 0,
+                            loop: 1,
+                            playlist: video.id,
+                            modestbranding: 1,
+                            playsinline: 1
+                        },
+                        events: {
+                            onReady: (event) => {
+                                if (index === 0) {
+                                    event.target.playVideo();
+                                }
+                            },
+                            onStateChange: (event) => {
+                                // Handle state changes if needed
+                            }
+                        }
+                    });
+                    playersRef.current[video.id] = player;
+                } catch (err) {
+                    console.error('Error creating player for video:', video.id, err);
                 }
             }
         });
     };
 
-    // Preload all videos when loaded
-    useEffect(() => {
-        if (videos.length > 0 && isPreloaded) {
-            // Preload all videos
-            videos.forEach((video) => {
-                const iframe = videoRefs.current[video.id];
-                if (iframe) {
-                    // Set source to preload
-                    iframe.src = `https://www.youtube.com/embed/${video.id}?autoplay=0&rel=0&controls=0&loop=1&playlist=${video.id}&enablejsapi=1`;
-                }
-            });
-
-            // Play first video after a short delay
-            setTimeout(() => {
-                const firstVideo = videos[0];
-                pauseAllVideos(null);
-                const firstIframe = videoRefs.current[firstVideo?.id];
-                if (firstIframe) {
-                    firstIframe.contentWindow?.postMessage(
-                        '{"event":"command","func":"seekTo","args":[0, true]}',
-                        '*'
-                    );
-                    setTimeout(() => {
-                        firstIframe.contentWindow?.postMessage(
-                            '{"event":"command","func":"playVideo","args":""}',
-                            '*'
-                        );
-                    }, 200);
-                }
-            }, 100);
+    // Safe play function with error handling
+    const safePlayVideo = (videoId) => {
+        try {
+            const player = playersRef.current[videoId];
+            if (player && typeof player.playVideo === 'function') {
+                player.playVideo();
+            } else {
+                console.warn('Player not ready for video:', videoId);
+            }
+        } catch (err) {
+            console.error('Error playing video:', err);
         }
-    }, [videos, isPreloaded]);
+    };
+
+    // Safe pause function with error handling
+    const safePauseVideo = (videoId) => {
+        try {
+            const player = playersRef.current[videoId];
+            if (player && typeof player.pauseVideo === 'function') {
+                player.pauseVideo();
+            } else {
+                console.warn('Player not ready for pause:', videoId);
+            }
+        } catch (err) {
+            console.error('Error pausing video:', err);
+        }
+    };
+
+    // Safe destroy function with error handling
+    const safeDestroyPlayer = (videoId) => {
+        try {
+            const player = playersRef.current[videoId];
+            if (player && typeof player.destroy === 'function') {
+                player.destroy();
+            }
+        } catch (err) {
+            console.error('Error destroying player:', err);
+        }
+    };
 
     // Touch handlers for swipe detection
     useEffect(() => {
@@ -163,9 +220,14 @@ export default function ReelsFeed({ onClose }) {
         if (currentIndex < videos.length - 1 && !isTransitioning.current) {
             isTransitioning.current = true;
             const newIndex = currentIndex + 1;
-            setCurrentIndex(newIndex);
+            
+            // Pause current video safely
+            const currentVideo = videos[currentIndex];
+            if (currentVideo && playersRef.current[currentVideo.id]) {
+                safePauseVideo(currentVideo.id);
+            }
 
-            pauseAllVideos(videos[newIndex]?.id);
+            setCurrentIndex(newIndex);
 
             const container = containerRef.current;
             if (container) {
@@ -178,23 +240,14 @@ export default function ReelsFeed({ onClose }) {
                 }
             }
 
+            // Play new video after a delay
             setTimeout(() => {
                 const nextVideo = videos[newIndex];
-                if (nextVideo && videoRefs.current[nextVideo.id]) {
-                    // Video is already preloaded, just play it immediately
-                    videoRefs.current[nextVideo.id]?.contentWindow?.postMessage(
-                        '{"event":"command","func":"seekTo","args":[0, true]}',
-                        '*'
-                    );
-                    setTimeout(() => {
-                        videoRefs.current[nextVideo.id]?.contentWindow?.postMessage(
-                            '{"event":"command","func":"playVideo","args":""}',
-                            '*'
-                        );
-                    }, 50);
+                if (nextVideo && playersRef.current[nextVideo.id]) {
+                    safePlayVideo(nextVideo.id);
                 }
                 isTransitioning.current = false;
-            }, 200);
+            }, 300);
         }
     };
 
@@ -202,9 +255,14 @@ export default function ReelsFeed({ onClose }) {
         if (currentIndex > 0 && !isTransitioning.current) {
             isTransitioning.current = true;
             const newIndex = currentIndex - 1;
-            setCurrentIndex(newIndex);
+            
+            // Pause current video safely
+            const currentVideo = videos[currentIndex];
+            if (currentVideo && playersRef.current[currentVideo.id]) {
+                safePauseVideo(currentVideo.id);
+            }
 
-            pauseAllVideos(videos[newIndex]?.id);
+            setCurrentIndex(newIndex);
 
             const container = containerRef.current;
             if (container) {
@@ -217,29 +275,25 @@ export default function ReelsFeed({ onClose }) {
                 }
             }
 
+            // Play new video after a delay
             setTimeout(() => {
                 const prevVideo = videos[newIndex];
-                if (prevVideo && videoRefs.current[prevVideo.id]) {
-                    videoRefs.current[prevVideo.id]?.contentWindow?.postMessage(
-                        '{"event":"command","func":"seekTo","args":[0, true]}',
-                        '*'
-                    );
-                    setTimeout(() => {
-                        videoRefs.current[prevVideo.id]?.contentWindow?.postMessage(
-                            '{"event":"command","func":"playVideo","args":""}',
-                            '*'
-                        );
-                    }, 50);
+                if (prevVideo && playersRef.current[prevVideo.id]) {
+                    safePlayVideo(prevVideo.id);
                 }
                 isTransitioning.current = false;
-            }, 200);
+            }, 300);
         }
     };
 
-    // Handle iframe load
-    const handleIframeLoad = (videoId) => {
-        pauseAllVideos(videoId);
-    };
+    // Cleanup players on unmount
+    useEffect(() => {
+        return () => {
+            Object.keys(playersRef.current).forEach(videoId => {
+                safeDestroyPlayer(videoId);
+            });
+        };
+    }, []);
 
     if (loading) {
         return (
@@ -273,34 +327,7 @@ export default function ReelsFeed({ onClose }) {
                         data-video-id={video.id}
                     >
                         <div className="reels-feed-video-wrapper">
-                            {/* Preload the iframe with autoplay=0 so it loads in background */}
-                            <iframe
-                                ref={(el) => {
-                                    if (el) {
-                                        videoRefs.current[video.id] = el;
-                                    }
-                                }}
-                                src={`https://www.youtube.com/embed/${video.id}?autoplay=1&rel=0&controls=0&loop=1&playlist=${video.id}&enablejsapi=1`}
-                                title={video.title}
-                                frameBorder="0"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                                className="reels-feed-video"
-                                onLoad={() => {
-                                    // Play the video as soon as it loads
-                                    const iframe = videoRefs.current[video.id];
-                                    if (iframe) {
-                                        setTimeout(() => {
-                                            iframe.contentWindow?.postMessage(
-                                                '{"event":"command","func":"playVideo","args":""}',
-                                                '*'
-                                            );
-                                        }, 50);
-                                    }
-                                    handleIframeLoad(video.id);
-                                }}
-                                loading="eager"
-                            />
+                            <div id={`player-${video.id}`} className="reels-feed-video"></div>
                         </div>
                         <div className="reels-feed-overlay">
                             <div className="reels-feed-info">

@@ -41,46 +41,46 @@ function renderMessage(text) {
   // First, clean up the text - ensure proper paragraph breaks
   // Replace single newlines followed by a capital letter or bold text with double newlines
   let processedText = text;
-  
+
   // If there are no double newlines, try to detect paragraphs
   if (!processedText.includes('\n\n')) {
     // Split by single newlines and filter out empty lines
     const lines = processedText.split('\n').filter(line => line.trim());
-    
+
     // Group lines into paragraphs (heuristic: if a line is short or starts with a bullet, it's part of previous paragraph)
     const paragraphs = [];
     let currentParagraph = [];
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-      
+
       // Check if this line starts a new paragraph
       const isBullet = line.startsWith('-') || line.startsWith('•') || line.startsWith('*');
       const isBoldHeading = line.startsWith('**') && line.includes('**:');
       const isShortLine = line.length < 30 && !isBullet;
-      const isNewParagraph = isBullet || isBoldHeading || 
-                            (isShortLine && i > 0 && lines[i-1].length > 30) ||
-                            (line.match(/^[A-Z]/) && i > 0 && lines[i-1].length > 30);
-      
+      const isNewParagraph = isBullet || isBoldHeading ||
+        (isShortLine && i > 0 && lines[i - 1].length > 30) ||
+        (line.match(/^[A-Z]/) && i > 0 && lines[i - 1].length > 30);
+
       if (isNewParagraph && currentParagraph.length > 0) {
         paragraphs.push(currentParagraph.join(' '));
         currentParagraph = [];
       }
-      
+
       currentParagraph.push(line);
     }
-    
+
     if (currentParagraph.length > 0) {
       paragraphs.push(currentParagraph.join(' '));
     }
-    
+
     // Rejoin with double newlines
     processedText = paragraphs.join('\n\n');
   }
-  
+
   // Now split by double newlines for actual paragraphs
   const paragraphs = processedText.split(/\n\n/).filter(p => p.trim());
-  
+
   return paragraphs.map((paragraph, index) => {
     // Check if it's a list (contains bullet points)
     if (paragraph.includes('•') || paragraph.includes('-')) {
@@ -102,7 +102,7 @@ function renderMessage(text) {
         </div>
       );
     }
-    
+
     // Check if it's a bold heading
     if (paragraph.startsWith('**') && paragraph.endsWith('**')) {
       return (
@@ -111,7 +111,7 @@ function renderMessage(text) {
         </p>
       );
     }
-    
+
     // Check if it's a heading (starts with bold and colon)
     if (paragraph.includes('**:')) {
       const parts = paragraph.split('**:');
@@ -123,7 +123,7 @@ function renderMessage(text) {
         );
       }
     }
-    
+
     // Regular paragraph
     return (
       <p key={index} className="msg-paragraph" style={{ marginBottom: '20px', lineHeight: '1.8' }}>
@@ -345,7 +345,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ devotion })
       });
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -584,7 +584,7 @@ export default function Home() {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 6px 10px;
+          padding: 10px 10px;
           border-radius: 8px !important;
           cursor: pointer;
           transition: all 0.15s;
@@ -641,6 +641,22 @@ export default function Home() {
         .btn-upgrade:hover {
           background: var(--bg-hover);
           border-color: var(--border-light);
+        }
+
+        /* Add light mode specific styles */
+        .app.light .btn-upgrade {
+          background: #ffffff;  /* White background */
+          color: #1a1a24;  /* Dark text */
+          border-color: #9a9a9a;  /* Visible border */
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);  /* Subtle shadow */
+          padding: 10px 16px;  /* Slightly larger */
+          font-weight: 500;
+        }
+        .app.light .btn-upgrade:hover {
+          background: #f0f0f2;  /* Slightly darker on hover */
+          border-color: #b0b0b8;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
         .sidebar-user {
@@ -829,7 +845,7 @@ export default function Home() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 8px;
+          margin-bottom: 20px;
           flex-wrap: wrap;
           gap: 6px;
         }
@@ -860,13 +876,14 @@ export default function Home() {
         }
         .card-date {
           font-size: 12px;
-          color: var(--text-muted);
+          color: #ffffff;
+          font-weight: 500;
         }
         .card-title {
           font-size: 22px;
           font-weight: 500;
           color: var(--text-primary);
-          margin-bottom: 6px;
+          margin-bottom: 16px;
           letter-spacing: -0.01em;
         }
         .card-scripture {
@@ -881,10 +898,15 @@ export default function Home() {
         }
         .app.light .card-scripture {
           background: rgba(0,0,0,0.02);
-          border-left: 3px solid #7c22fe;
+          border-left: 3px solid #222222;
           color: #4a4a5e;
         }
         
+        .app.light .card-date {
+          color: #4a4a5e;
+          font-weight: 500;
+        }
+
         /* Devotional story paragraph spacing - INCREASED */
         .card-story .story-paragraph {
           margin-bottom: 1rem !important;
@@ -893,6 +915,10 @@ export default function Home() {
         .card-story .story-paragraph:last-child {
           margin-bottom: 0 !important;
         }
+
+        .app.light .card-story {
+          color: #202020;  /* <-- CHANGE THIS VALUE */
+        }
         
         .prayer-section {
           background: rgba(255,255,255,0.02);
@@ -900,9 +926,10 @@ export default function Home() {
           padding: 12px 16px;
           border-radius: 0 6px 6px 0;
           margin-top: 16px;
+          margin-bottom: 20px;
         }
         .app.light .prayer-section {
-          border-left: 3px solid #7c22fe;
+          border-left: 3px solid #222222;
           background: rgba(0,0,0,0.02);
         }
         .prayer-title {
@@ -913,7 +940,7 @@ export default function Home() {
           letter-spacing: 0.02em;
         }
         .app.light .prayer-title {
-          color: #7c22fe;
+          color: #222222;
         }
         .prayer-text {
           color: #f7f4ef;
@@ -973,6 +1000,22 @@ export default function Home() {
           background: rgba(124, 58, 237, 0.2);
         }
 
+        /* Add light mode specific styles */
+        .app.light .action-btn {
+          background: #d0d0d0;  /* White background */
+          color: #1a1a24;  /* Dark text */
+          border-color: #d0d0d8;  /* Visible border */
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);  /* Subtle shadow */
+          padding: 8px 18px;  /* Slightly larger */
+          font-weight: 500;
+        }
+        .app.light .action-btn:hover {
+          background: #f0f0f2;  /* Slightly darker on hover */
+          border-color: #b0b0b8;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
         .download-btn {
           margin-top: 12px;
           padding: 8px 16px;
@@ -1025,6 +1068,22 @@ export default function Home() {
         }
         .chat-messages .msg-paragraph:last-child {
           margin-bottom: 0 !important;
+        }
+
+        /* Light mode - white background like devotional card */
+        .app.light .chat-messages {
+            background: #ffffff !important;  /* White background */
+            border-color: #e0e0e8;  /* Lighter border */
+        }
+
+        .app.light .chat-message.assistant .bubble {
+            background: #e8e8e8 !important;  /* White background */
+            border-color: #e0e0e8;  /* Lighter border */
+        }
+
+        .app.light .chat-message.assistant .bubble .timestamp {
+            color: #4e4e4e !important;
+            opacity: 1 !important;
         }
 
         /* Welcome Screen */
@@ -1171,6 +1230,15 @@ export default function Home() {
         }
         .chat-input input::placeholder { color: var(--text-muted); }
 
+        .app.light .chat-input input {
+            color: #000000 !important;
+            border: 1px solid #707070 !important;
+        }
+
+        .app.light .chat-input input::placeholder {
+          color: #404040 !important;  /* Dark gray for light mode */
+        }
+
         /* Send button - gray with white text */
         .send-btn {
           padding: 8px 20px;
@@ -1270,7 +1338,7 @@ export default function Home() {
             align-items: center !important;
             justify-content: flex-start !important;
             gap: 6px !important;
-            margin-bottom: 4px !important;
+            margin-bottom: 12px !important;
             min-height: 36px !important;
             flex-wrap: nowrap !important;
             width: 100% !important;
@@ -1405,6 +1473,13 @@ export default function Home() {
             min-width: 0 !important;
             height: 40px !important;
           }
+
+          /* Light mode - white background like devotional card */
+          .app.light .chat-messages {
+            background: #ffffff !important;  /* White background */
+            border-color: #e0e0e8;  /* Lighter border */
+          }
+
           .send-btn {
             padding: 10px 14px !important;
             font-size: 13px !important;
@@ -1452,7 +1527,7 @@ export default function Home() {
           .main-header { 
             gap: 4px !important;
             min-height: 32px !important;
-            margin-bottom: 2px !important;
+            margin-bottom: 10px !important;
           }
           
           .hamburger-btn {
@@ -1692,14 +1767,14 @@ export default function Home() {
                 </div>
                 <h2 className="card-title">{selectedDevotion.title}</h2>
                 <div className="card-scripture">{selectedDevotion.scripture}</div>
-                
+
                 {/* Devotion story with proper paragraph spacing */}
                 <div className="card-story">
                   {selectedDevotion.story.split(/\n\n|\n/).filter(p => p.trim()).map((paragraph, idx) => (
                     <p key={idx} className="story-paragraph">{paragraph}</p>
                   ))}
                 </div>
-                
+
                 {selectedDevotion.prayer && (
                   <div className="prayer-section">
                     <div className="prayer-title">🙏 Prayer</div>
