@@ -2,8 +2,18 @@
 
 import { useState, useEffect, useRef } from 'react';
 
+// Cache key for localStorage
+const VIDEO_CACHE_KEY = 'cached_reels_data';
+const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// Default videos (fallback if cache is empty)
+const DEFAULT_VIDEOS = [
+  // Add your video IDs here as fallback
+  // Example: { id: 'VIDEO_ID', title: 'Video Title', channelTitle: 'Channel' }
+];
+
 export default function ReelsFeed({ onClose }) {
-    const [videos, setVideos] = useState([]);
+    const [videos, setVideos] = useState(DEFAULT_VIDEOS);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -14,27 +24,99 @@ export default function ReelsFeed({ onClose }) {
     const isTransitioning = useRef(false);
     const [apiReady, setApiReady] = useState(false);
 
+    // Load videos from cache or fetch
     useEffect(() => {
-        async function loadVideos() {
-            try {
-                const response = await fetch('/api/reels');
-                const data = await response.json();
-
-                if (data.success && data.videos.length > 0) {
-                    setVideos(data.videos);
-                    loadYouTubeAPI();
-                } else {
-                    setError('No videos found');
-                }
-            } catch (err) {
-                setError(err.message || 'Failed to load videos');
-            } finally {
-                setLoading(false);
-            }
-        }
-
         loadVideos();
+        loadYouTubeAPI();
     }, []);
+
+    const loadVideos = async () => {
+        try {
+            // 1. Check localStorage cache
+            const cached = localStorage.getItem(VIDEO_CACHE_KEY);
+            
+            if (cached) {
+                const { videos: cachedVideos, timestamp } = JSON.parse(cached);
+                const age = Date.now() - timestamp;
+                
+                // Use cache if it's not too old
+                if (cachedVideos && cachedVideos.length > 0 && age < CACHE_DURATION) {
+                    console.log('📦 Loading videos from cache...');
+                    setVideos(cachedVideos);
+                    setLoading(false);
+                    
+                    // Still check for updates in background (silent)
+                    fetchVideosInBackground();
+                    return;
+                }
+            }
+
+            // 2. No valid cache - fetch from API
+            await fetchAndCacheVideos();
+        } catch (err) {
+            console.error('Error loading videos:', err);
+            setError(err.message);
+            setLoading(false);
+        }
+    };
+
+    const fetchAndCacheVideos = async () => {
+        try {
+            const response = await fetch('/api/reels');
+            const data = await response.json();
+
+            if (data.success && data.videos.length > 0) {
+                // Cache the videos
+                localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({
+                    videos: data.videos,
+                    timestamp: Date.now()
+                }));
+                setVideos(data.videos);
+            } else {
+                setError('No videos found');
+                // Use default videos if available
+                if (DEFAULT_VIDEOS.length > 0) {
+                    setVideos(DEFAULT_VIDEOS);
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching videos:', err);
+            setError(err.message);
+            // Use default videos if available
+            if (DEFAULT_VIDEOS.length > 0) {
+                setVideos(DEFAULT_VIDEOS);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Silent background fetch to update cache
+    const fetchVideosInBackground = async () => {
+        try {
+            const response = await fetch('/api/reels');
+            const data = await response.json();
+            
+            if (data.success && data.videos.length > 0) {
+                // Check if new videos were added
+                const cached = JSON.parse(localStorage.getItem(VIDEO_CACHE_KEY) || '{}');
+                const cachedVideos = cached.videos || [];
+                
+                if (data.videos.length !== cachedVideos.length) {
+                    // Update cache with new videos
+                    localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({
+                        videos: data.videos,
+                        timestamp: Date.now()
+                    }));
+                    setVideos(data.videos);
+                    console.log('🔄 Cache updated with new videos');
+                }
+            }
+        } catch (err) {
+            // Silent fail - cache is fine
+            console.log('Background update failed, using cached videos');
+        }
+    };
 
     const loadYouTubeAPI = () => {
         if (window.YT && window.YT.Player) {
@@ -52,8 +134,15 @@ export default function ReelsFeed({ onClose }) {
         };
     };
 
+    // Initialize players when API is ready
     useEffect(() => {
         if (apiReady && videos.length > 0) {
+            // Preload thumbnails
+            videos.forEach(video => {
+                const img = new Image();
+                img.src = `https://img.youtube.com/vi/${video.id}/hqdefault.jpg`;
+            });
+            
             setTimeout(() => {
                 initializePlayers();
             }, 100);
@@ -86,7 +175,6 @@ export default function ReelsFeed({ onClose }) {
                                 }
                             },
                             onStateChange: (event) => {
-                                // When video ends, restart from beginning
                                 if (event.data === window.YT.PlayerState.ENDED) {
                                     event.target.seekTo(0);
                                     event.target.playVideo();
@@ -96,7 +184,7 @@ export default function ReelsFeed({ onClose }) {
                     });
                     playersRef.current[video.id] = player;
                 } catch (err) {
-                    console.error('Error creating player for video:', video.id, err);
+                    console.error('Error creating player:', err);
                 }
             }
         });
@@ -107,32 +195,25 @@ export default function ReelsFeed({ onClose }) {
         try {
             const player = playersRef.current[videoId];
             if (player && typeof player.playVideo === 'function') {
-                // Seek to beginning before playing
                 player.seekTo(0);
                 player.playVideo();
-            } else {
-                console.warn('Player not ready for video:', videoId);
             }
         } catch (err) {
             console.error('Error playing video:', err);
         }
     };
 
-    // Safe pause function
     const safePauseVideo = (videoId) => {
         try {
             const player = playersRef.current[videoId];
             if (player && typeof player.pauseVideo === 'function') {
                 player.pauseVideo();
-            } else {
-                console.warn('Player not ready for pause:', videoId);
             }
         } catch (err) {
             console.error('Error pausing video:', err);
         }
     };
 
-    // Safe destroy function
     const safeDestroyPlayer = (videoId) => {
         try {
             const player = playersRef.current[videoId];
@@ -306,7 +387,7 @@ export default function ReelsFeed({ onClose }) {
         );
     }
 
-    if (error || videos.length === 0) {
+    if (error && videos.length === 0) {
         return (
             <div className="reels-fullscreen empty">
                 <div className="reels-empty-icon">🎬</div>
