@@ -11,6 +11,16 @@ const DEFAULT_VIDEOS = [
   // Add your video IDs here as fallback
 ];
 
+// Shuffle function
+const shuffleArray = (array) => {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
 export default function ReelsFeed({ onClose }) {
     const [videos, setVideos] = useState(DEFAULT_VIDEOS);
     const [loading, setLoading] = useState(true);
@@ -19,11 +29,13 @@ export default function ReelsFeed({ onClose }) {
     const containerRef = useRef(null);
     const playersRef = useRef({});
     const touchStartY = useRef(0);
-    const touchEndY = useRef(0);
+    const touchStartX = useRef(0);
+    const touchStartTime = useRef(0);
     const isTransitioning = useRef(false);
     const [apiReady, setApiReady] = useState(false);
     const [isInitialLoad, setIsInitialLoad] = useState(true);
     const [isPaused, setIsPaused] = useState(false);
+    const [shuffledVideos, setShuffledVideos] = useState([]);
 
     // Load videos from cache or fetch
     useEffect(() => {
@@ -52,7 +64,10 @@ export default function ReelsFeed({ onClose }) {
                 
                 if (cachedVideos && cachedVideos.length > 0 && age < CACHE_DURATION) {
                     console.log('📦 Loading videos from cache...');
-                    setVideos(cachedVideos);
+                    // Shuffle videos before setting
+                    const shuffled = shuffleArray(cachedVideos);
+                    setShuffledVideos(shuffled);
+                    setVideos(shuffled);
                     setLoading(false);
                     setIsInitialLoad(false);
                     fetchVideosInBackground();
@@ -78,19 +93,25 @@ export default function ReelsFeed({ onClose }) {
                     videos: data.videos,
                     timestamp: Date.now()
                 }));
-                setVideos(data.videos);
+                const shuffled = shuffleArray(data.videos);
+                setShuffledVideos(shuffled);
+                setVideos(shuffled);
                 setIsInitialLoad(false);
             } else {
                 setError('No videos found');
                 if (DEFAULT_VIDEOS.length > 0) {
-                    setVideos(DEFAULT_VIDEOS);
+                    const shuffled = shuffleArray(DEFAULT_VIDEOS);
+                    setShuffledVideos(shuffled);
+                    setVideos(shuffled);
                 }
             }
         } catch (err) {
             console.error('Error fetching videos:', err);
             setError(err.message);
             if (DEFAULT_VIDEOS.length > 0) {
-                setVideos(DEFAULT_VIDEOS);
+                const shuffled = shuffleArray(DEFAULT_VIDEOS);
+                setShuffledVideos(shuffled);
+                setVideos(shuffled);
             }
         } finally {
             setLoading(false);
@@ -111,7 +132,9 @@ export default function ReelsFeed({ onClose }) {
                         videos: data.videos,
                         timestamp: Date.now()
                     }));
-                    setVideos(data.videos);
+                    const shuffled = shuffleArray(data.videos);
+                    setShuffledVideos(shuffled);
+                    setVideos(shuffled);
                     console.log('🔄 Cache updated with new videos');
                 }
             }
@@ -242,22 +265,19 @@ export default function ReelsFeed({ onClose }) {
         }
     };
 
-    // Touch handlers with tap detection
+    // Touch handlers with proper tap detection
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
 
-        let tapTimeout = null;
-        let touchStartX = 0;
-        let touchStartYPos = 0;
-
         const handleTouchStart = (e) => {
             touchStartY.current = e.touches[0].clientY;
-            touchStartX = e.touches[0].clientX;
-            touchStartYPos = e.touches[0].clientY;
+            touchStartX.current = e.touches[0].clientX;
+            touchStartTime.current = Date.now();
         };
 
         const handleTouchMove = (e) => {
+            // Prevent default to avoid blue overlay and scrolling
             e.preventDefault();
         };
 
@@ -267,10 +287,12 @@ export default function ReelsFeed({ onClose }) {
             const touchEndY = e.changedTouches[0].clientY;
             const touchEndX = e.changedTouches[0].clientX;
             const diffY = touchStartY.current - touchEndY;
-            const diffX = touchStartX - touchEndX;
+            const diffX = touchStartX.current - touchEndX;
+            const timeDiff = Date.now() - touchStartTime.current;
 
-            // Check if it's a tap (small movement) vs swipe
-            if (Math.abs(diffY) < 15 && Math.abs(diffX) < 15) {
+            // Check if it's a tap (small movement, quick touch)
+            if (Math.abs(diffY) < 20 && Math.abs(diffX) < 20 && timeDiff < 300) {
+                e.preventDefault();
                 // It's a tap - toggle play/pause
                 togglePlayPause();
                 return;
@@ -286,15 +308,21 @@ export default function ReelsFeed({ onClose }) {
             }
         };
 
+        // Prevent context menu on long press
+        const handleContextMenu = (e) => {
+            e.preventDefault();
+        };
+
         container.addEventListener('touchstart', handleTouchStart, { passive: true });
         container.addEventListener('touchmove', handleTouchMove, { passive: false });
-        container.addEventListener('touchend', handleTouchEnd, { passive: true });
+        container.addEventListener('touchend', handleTouchEnd, { passive: false });
+        container.addEventListener('contextmenu', handleContextMenu);
 
         return () => {
             container.removeEventListener('touchstart', handleTouchStart);
             container.removeEventListener('touchmove', handleTouchMove);
             container.removeEventListener('touchend', handleTouchEnd);
-            if (tapTimeout) clearTimeout(tapTimeout);
+            container.removeEventListener('contextmenu', handleContextMenu);
         };
     }, [videos.length, currentIndex, isPaused]);
 
@@ -446,7 +474,7 @@ export default function ReelsFeed({ onClose }) {
             <div className="reels-feed-container" ref={containerRef}>
                 {videos.map((video, index) => (
                     <div
-                        key={video.id}
+                        key={`${video.id}-${index}`}
                         className="reels-feed-item"
                         data-video-id={video.id}
                         onClick={index === currentIndex ? handleVideoClick : undefined}
@@ -476,6 +504,9 @@ export default function ReelsFeed({ onClose }) {
           display: flex;
           flex-direction: column;
           overflow: hidden;
+          user-select: none;
+          -webkit-user-select: none;
+          -webkit-touch-callout: none;
         }
 
         .reels-fullscreen.loading,
@@ -537,6 +568,7 @@ export default function ReelsFeed({ onClose }) {
           justify-content: center;
           transition: all 0.2s;
           font-family: var(--font);
+          touch-action: manipulation;
         }
         .reels-close-btn:hover {
           background: rgba(255,255,255,0.2);
@@ -553,6 +585,9 @@ export default function ReelsFeed({ onClose }) {
           scroll-snap-type: y mandatory;
           scroll-behavior: auto;
           cursor: pointer;
+          touch-action: none;
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
         }
 
         .reels-feed-item {
@@ -563,6 +598,9 @@ export default function ReelsFeed({ onClose }) {
           flex-shrink: 0;
           scroll-snap-align: start;
           overflow: hidden;
+          touch-action: none;
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
         }
 
         .reels-feed-video-wrapper {
@@ -572,6 +610,8 @@ export default function ReelsFeed({ onClose }) {
           align-items: center;
           justify-content: center;
           background: #000;
+          pointer-events: none;
+          touch-action: none;
         }
 
         .reels-feed-video {
@@ -581,6 +621,7 @@ export default function ReelsFeed({ onClose }) {
           aspect-ratio: 9 / 16;
           background: #000;
           pointer-events: none;
+          touch-action: none;
         }
 
         .reels-feed-overlay {
