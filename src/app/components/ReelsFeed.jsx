@@ -36,11 +36,12 @@ export default function ReelsFeed({ onClose }) {
     const [isInitialLoad, setIsInitialLoad] = useState(true);
     const [isPaused, setIsPaused] = useState(false);
     const [shuffledVideos, setShuffledVideos] = useState([]);
+    const [showPlayIcon, setShowPlayIcon] = useState(false);
+    const iconTimeoutRef = useRef(null);
 
     // Load videos from cache or fetch
     useEffect(() => {
         loadVideos();
-        // Check if YouTube API is already preloaded
         if (window.YT && window.YT.Player) {
             setApiReady(true);
         } else {
@@ -64,7 +65,6 @@ export default function ReelsFeed({ onClose }) {
                 
                 if (cachedVideos && cachedVideos.length > 0 && age < CACHE_DURATION) {
                     console.log('📦 Loading videos from cache...');
-                    // Shuffle videos before setting
                     const shuffled = shuffleArray(cachedVideos);
                     setShuffledVideos(shuffled);
                     setVideos(shuffled);
@@ -153,9 +153,21 @@ export default function ReelsFeed({ onClose }) {
             if (isPaused) {
                 player.playVideo();
                 setIsPaused(false);
+                setShowPlayIcon(false);
+                if (iconTimeoutRef.current) {
+                    clearTimeout(iconTimeoutRef.current);
+                }
             } else {
                 player.pauseVideo();
                 setIsPaused(true);
+                setShowPlayIcon(true);
+                // Auto-hide play icon after 2 seconds
+                if (iconTimeoutRef.current) {
+                    clearTimeout(iconTimeoutRef.current);
+                }
+                iconTimeoutRef.current = setTimeout(() => {
+                    setShowPlayIcon(false);
+                }, 2000);
             }
         } catch (err) {
             console.error('Error toggling play/pause:', err);
@@ -188,7 +200,7 @@ export default function ReelsFeed({ onClose }) {
                         videoId: video.id,
                         playerVars: {
                             autoplay: index === 0 ? 1 : 0,
-                            controls: 0,
+                            controls: 0, // No controls
                             rel: 0,
                             loop: 1,
                             playlist: video.id,
@@ -196,7 +208,10 @@ export default function ReelsFeed({ onClose }) {
                             playsinline: 1,
                             origin: window.location.origin,
                             enablejsapi: 1,
-                            iv_load_policy: 3
+                            iv_load_policy: 3,
+                            showinfo: 0,
+                            fs: 0,
+                            disablekb: 1
                         },
                         events: {
                             onReady: (event) => {
@@ -210,12 +225,24 @@ export default function ReelsFeed({ onClose }) {
                                     event.target.seekTo(0);
                                     event.target.playVideo();
                                     setIsPaused(false);
+                                    setShowPlayIcon(false);
                                 }
                                 if (event.data === window.YT.PlayerState.PAUSED) {
                                     setIsPaused(true);
+                                    setShowPlayIcon(true);
+                                    if (iconTimeoutRef.current) {
+                                        clearTimeout(iconTimeoutRef.current);
+                                    }
+                                    iconTimeoutRef.current = setTimeout(() => {
+                                        setShowPlayIcon(false);
+                                    }, 2000);
                                 }
                                 if (event.data === window.YT.PlayerState.PLAYING) {
                                     setIsPaused(false);
+                                    setShowPlayIcon(false);
+                                    if (iconTimeoutRef.current) {
+                                        clearTimeout(iconTimeoutRef.current);
+                                    }
                                 }
                             }
                         }
@@ -236,6 +263,7 @@ export default function ReelsFeed({ onClose }) {
                 player.seekTo(0);
                 player.playVideo();
                 setIsPaused(false);
+                setShowPlayIcon(false);
             }
         } catch (err) {
             console.error('Error playing video:', err);
@@ -277,7 +305,6 @@ export default function ReelsFeed({ onClose }) {
         };
 
         const handleTouchMove = (e) => {
-            // Prevent default to avoid blue overlay and scrolling
             e.preventDefault();
         };
 
@@ -293,7 +320,7 @@ export default function ReelsFeed({ onClose }) {
             // Check if it's a tap (small movement, quick touch)
             if (Math.abs(diffY) < 20 && Math.abs(diffX) < 20 && timeDiff < 300) {
                 e.preventDefault();
-                // It's a tap - toggle play/pause
+                e.stopPropagation();
                 togglePlayPause();
                 return;
             }
@@ -308,27 +335,33 @@ export default function ReelsFeed({ onClose }) {
             }
         };
 
-        // Prevent context menu on long press
         const handleContextMenu = (e) => {
             e.preventDefault();
+            e.stopPropagation();
+        };
+
+        // Prevent all default touch behaviors
+        const handleTouchCancel = (e) => {
+            // Do nothing, just prevent default
         };
 
         container.addEventListener('touchstart', handleTouchStart, { passive: true });
         container.addEventListener('touchmove', handleTouchMove, { passive: false });
         container.addEventListener('touchend', handleTouchEnd, { passive: false });
+        container.addEventListener('touchcancel', handleTouchCancel, { passive: false });
         container.addEventListener('contextmenu', handleContextMenu);
 
         return () => {
             container.removeEventListener('touchstart', handleTouchStart);
             container.removeEventListener('touchmove', handleTouchMove);
             container.removeEventListener('touchend', handleTouchEnd);
+            container.removeEventListener('touchcancel', handleTouchCancel);
             container.removeEventListener('contextmenu', handleContextMenu);
         };
     }, [videos.length, currentIndex, isPaused]);
 
     // Click handler for desktop
     const handleVideoClick = (e) => {
-        // Prevent click from triggering on overlay buttons
         if (e.target.closest('.reels-feed-overlay') || e.target.closest('.reels-close-btn')) {
             return;
         }
@@ -382,6 +415,10 @@ export default function ReelsFeed({ onClose }) {
 
             setCurrentIndex(newIndex);
             setIsPaused(false);
+            setShowPlayIcon(false);
+            if (iconTimeoutRef.current) {
+                clearTimeout(iconTimeoutRef.current);
+            }
 
             const container = containerRef.current;
             if (container) {
@@ -416,6 +453,10 @@ export default function ReelsFeed({ onClose }) {
 
             setCurrentIndex(newIndex);
             setIsPaused(false);
+            setShowPlayIcon(false);
+            if (iconTimeoutRef.current) {
+                clearTimeout(iconTimeoutRef.current);
+            }
 
             const container = containerRef.current;
             if (container) {
@@ -444,6 +485,9 @@ export default function ReelsFeed({ onClose }) {
             Object.keys(playersRef.current).forEach(videoId => {
                 safeDestroyPlayer(videoId);
             });
+            if (iconTimeoutRef.current) {
+                clearTimeout(iconTimeoutRef.current);
+            }
         };
     }, []);
 
@@ -487,7 +531,7 @@ export default function ReelsFeed({ onClose }) {
                                 <h3 className="reels-feed-title">{video.title}</h3>
                                 <p className="reels-feed-channel">{video.channelTitle}</p>
                             </div>
-                            {index === currentIndex && isPaused && (
+                            {index === currentIndex && showPlayIcon && (
                                 <div className="reels-play-icon">▶</div>
                             )}
                         </div>
@@ -507,6 +551,7 @@ export default function ReelsFeed({ onClose }) {
           user-select: none;
           -webkit-user-select: none;
           -webkit-touch-callout: none;
+          touch-action: manipulation;
         }
 
         .reels-fullscreen.loading,
@@ -588,6 +633,7 @@ export default function ReelsFeed({ onClose }) {
           touch-action: none;
           -webkit-touch-callout: none;
           -webkit-user-select: none;
+          touch-action: manipulation;
         }
 
         .reels-feed-item {
@@ -668,6 +714,7 @@ export default function ReelsFeed({ onClose }) {
           text-shadow: 0 2px 20px rgba(0,0,0,0.8);
           pointer-events: none;
           animation: fadeInOut 0.3s ease;
+          z-index: 10;
         }
 
         @keyframes fadeInOut {
@@ -687,6 +734,11 @@ export default function ReelsFeed({ onClose }) {
 
         @keyframes spin {
           to { transform: rotate(360deg); }
+        }
+
+        /* Hide any YouTube branding that might appear */
+        .reels-feed-video iframe {
+          pointer-events: none !important;
         }
 
         @media (max-width: 768px) {
