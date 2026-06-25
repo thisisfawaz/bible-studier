@@ -50,6 +50,31 @@ export default function RootLayout({ children }) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       style={{ background: '#101012' }}
     >
+      <head>
+        {/* Preload YouTube API on app startup */}
+        <link rel="preconnect" href="https://www.youtube.com" />
+        <link rel="preconnect" href="https://www.youtube-nocookie.com" />
+        <link rel="dns-prefetch" href="https://www.youtube.com" />
+        <script
+          src="https://www.youtube.com/iframe_api"
+          async
+          defer
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Preload YouTube API
+              if (typeof window !== 'undefined') {
+                window.YT_READY = false;
+                window.onYouTubeIframeAPIReady = function() {
+                  window.YT_READY = true;
+                  console.log('🎬 YouTube API preloaded on app startup');
+                };
+              }
+            `
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col" style={{ background: '#101012' }}>
         {children}
       </body>

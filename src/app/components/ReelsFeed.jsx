@@ -23,11 +23,25 @@ export default function ReelsFeed({ onClose }) {
     const touchEndY = useRef(0);
     const isTransitioning = useRef(false);
     const [apiReady, setApiReady] = useState(false);
+    const [isInitialLoad, setIsInitialLoad] = useState(true);
 
     // Load videos from cache or fetch
     useEffect(() => {
         loadVideos();
-        loadYouTubeAPI();
+        // Check if YouTube API is already preloaded
+        if (window.YT && window.YT.Player) {
+            setApiReady(true);
+        } else {
+            // Wait for preloaded API
+            const checkAPI = setInterval(() => {
+                if (window.YT && window.YT.Player) {
+                    setApiReady(true);
+                    clearInterval(checkAPI);
+                }
+            }, 100);
+            // Timeout after 5 seconds
+            setTimeout(() => clearInterval(checkAPI), 5000);
+        }
     }, []);
 
     const loadVideos = async () => {
@@ -44,6 +58,7 @@ export default function ReelsFeed({ onClose }) {
                     console.log('📦 Loading videos from cache...');
                     setVideos(cachedVideos);
                     setLoading(false);
+                    setIsInitialLoad(false);
                     
                     // Still check for updates in background (silent)
                     fetchVideosInBackground();
@@ -72,9 +87,9 @@ export default function ReelsFeed({ onClose }) {
                     timestamp: Date.now()
                 }));
                 setVideos(data.videos);
+                setIsInitialLoad(false);
             } else {
                 setError('No videos found');
-                // Use default videos if available
                 if (DEFAULT_VIDEOS.length > 0) {
                     setVideos(DEFAULT_VIDEOS);
                 }
@@ -82,7 +97,6 @@ export default function ReelsFeed({ onClose }) {
         } catch (err) {
             console.error('Error fetching videos:', err);
             setError(err.message);
-            // Use default videos if available
             if (DEFAULT_VIDEOS.length > 0) {
                 setVideos(DEFAULT_VIDEOS);
             }
@@ -98,12 +112,10 @@ export default function ReelsFeed({ onClose }) {
             const data = await response.json();
             
             if (data.success && data.videos.length > 0) {
-                // Check if new videos were added
                 const cached = JSON.parse(localStorage.getItem(VIDEO_CACHE_KEY) || '{}');
                 const cachedVideos = cached.videos || [];
                 
                 if (data.videos.length !== cachedVideos.length) {
-                    // Update cache with new videos
                     localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({
                         videos: data.videos,
                         timestamp: Date.now()
@@ -113,30 +125,13 @@ export default function ReelsFeed({ onClose }) {
                 }
             }
         } catch (err) {
-            // Silent fail - cache is fine
             console.log('Background update failed, using cached videos');
         }
     };
 
-    const loadYouTubeAPI = () => {
-        if (window.YT && window.YT.Player) {
-            setApiReady(true);
-            return;
-        }
-        
-        const tag = document.createElement('script');
-        tag.src = 'https://www.youtube.com/iframe_api';
-        const firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-        window.onYouTubeIframeAPIReady = () => {
-            setApiReady(true);
-        };
-    };
-
     // Initialize players when API is ready
     useEffect(() => {
-        if (apiReady && videos.length > 0) {
+        if (apiReady && videos.length > 0 && !isInitialLoad) {
             // Preload thumbnails
             videos.forEach(video => {
                 const img = new Image();
@@ -145,9 +140,9 @@ export default function ReelsFeed({ onClose }) {
             
             setTimeout(() => {
                 initializePlayers();
-            }, 100);
+            }, 50);
         }
-    }, [apiReady, videos]);
+    }, [apiReady, videos, isInitialLoad]);
 
     const initializePlayers = () => {
         videos.forEach((video, index) => {
@@ -166,7 +161,10 @@ export default function ReelsFeed({ onClose }) {
                             loop: 1,
                             playlist: video.id,
                             modestbranding: 1,
-                            playsinline: 1
+                            playsinline: 1,
+                            origin: window.location.origin,
+                            enablejsapi: 1,
+                            iv_load_policy: 3
                         },
                         events: {
                             onReady: (event) => {
@@ -304,7 +302,6 @@ export default function ReelsFeed({ onClose }) {
             isTransitioning.current = true;
             const newIndex = currentIndex + 1;
             
-            // Pause current video
             const currentVideo = videos[currentIndex];
             if (currentVideo && playersRef.current[currentVideo.id]) {
                 safePauseVideo(currentVideo.id);
@@ -323,14 +320,13 @@ export default function ReelsFeed({ onClose }) {
                 }
             }
 
-            // Play new video from beginning
             setTimeout(() => {
                 const nextVideo = videos[newIndex];
                 if (nextVideo && playersRef.current[nextVideo.id]) {
                     safePlayVideo(nextVideo.id);
                 }
                 isTransitioning.current = false;
-            }, 300);
+            }, 200);
         }
     };
 
@@ -339,7 +335,6 @@ export default function ReelsFeed({ onClose }) {
             isTransitioning.current = true;
             const newIndex = currentIndex - 1;
             
-            // Pause current video
             const currentVideo = videos[currentIndex];
             if (currentVideo && playersRef.current[currentVideo.id]) {
                 safePauseVideo(currentVideo.id);
@@ -358,14 +353,13 @@ export default function ReelsFeed({ onClose }) {
                 }
             }
 
-            // Play new video from beginning
             setTimeout(() => {
                 const prevVideo = videos[newIndex];
                 if (prevVideo && playersRef.current[prevVideo.id]) {
                     safePlayVideo(prevVideo.id);
                 }
                 isTransitioning.current = false;
-            }, 300);
+            }, 200);
         }
     };
 
