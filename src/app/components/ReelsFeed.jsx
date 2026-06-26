@@ -29,7 +29,7 @@ function VideoCard({ video, index, isActive, apiReady }) {
         if (!isActive) {
             setVideoStarted(false);
             if (playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
-                playerRef.current.pauseVideo();
+                try { playerRef.current.pauseVideo(); } catch (e) {}
             }
         }
     }, [isActive]);
@@ -64,9 +64,7 @@ function VideoCard({ video, index, isActive, apiReady }) {
                 player.setOption('cc', 'track', {});
                 player.setOption('captions', 'reload', false);
             }
-        } catch (e) {
-            console.log("Caption removal bypass handled.");
-        }
+        } catch (e) {}
     };
 
     useEffect(() => {
@@ -103,7 +101,7 @@ function VideoCard({ video, index, isActive, apiReady }) {
                                     event.target.unMute();
                                     event.target.setVolume(100);
                                 }
-                                event.target.playVideo();
+                                try { event.target.playVideo(); } catch (e) {}
                             }
                         },
                         onStateChange: (event) => {
@@ -131,9 +129,9 @@ function VideoCard({ video, index, isActive, apiReady }) {
                     playerRef.current.setVolume(100);
                 }
                 forceDisableCaptions(playerRef.current);
-                playerRef.current.playVideo();
+                try { playerRef.current.playVideo(); } catch (e) {}
             } else {
-                playerRef.current.pauseVideo();
+                try { playerRef.current.pauseVideo(); } catch (e) {}
             }
         }
     }, [isActive]);
@@ -191,7 +189,6 @@ export default function ReelsFeed({ onClose }) {
     const [apiReady, setApiReady] = useState(false);
     
     const containerRef = useRef(null);
-    const scrollTimeoutRef = useRef(null);
 
     useEffect(() => {
         if (window.YT && window.YT.Player) {
@@ -266,30 +263,38 @@ export default function ReelsFeed({ onClose }) {
         }
     };
 
+    // FIX: Using intersection observer directly on items inside the snap container for absolute sync accuracy
     useEffect(() => {
         const container = containerRef.current;
-        if (!container) return;
+        if (!container || videos.length === 0) return;
 
-        const handleScroll = () => {
-            if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+        const observerOptions = {
+            root: container,
+            rootMargin: '0px',
+            threshold: 0.6 // Card must be 60% visible before it toggles state
+        };
 
-            scrollTimeoutRef.current = setTimeout(() => {
-                const scrollTop = container.scrollTop;
-                const slideHeight = window.innerHeight;
-                const newIndex = Math.round(scrollTop / slideHeight);
-                
-                if (newIndex !== currentIndex && newIndex >= 0 && newIndex < videos.length) {
-                    setCurrentIndex(newIndex);
+        const observerCallback = (entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    const index = parseInt(entry.target.getAttribute('data-index'), 10);
+                    if (!isNaN(index)) {
+                        setCurrentIndex(index);
+                    }
                 }
-            }, 40);
+            });
         };
 
-        container.addEventListener('scroll', handleScroll, { passive: true });
+        const observer = new IntersectionObserver(observerCallback, observerOptions);
+        
+        // Target children of container
+        const children = container.querySelectorAll('.reels-feed-item');
+        children.forEach((child) => observer.observe(child));
+
         return () => {
-            container.removeEventListener('scroll', handleScroll);
-            if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+            if (observer) observer.disconnect();
         };
-    }, [videos.length, currentIndex]);
+    }, [videos]);
 
     if (loading) {
         return (
@@ -327,7 +332,11 @@ export default function ReelsFeed({ onClose }) {
 
             <div className="reels-feed-container" ref={containerRef}>
                 {videos.map((video, index) => (
-                    <div key={`${video.videoId || video.id}-${index}`} className="reels-feed-item">
+                    <div 
+                        key={`${video.videoId || video.id}-${index}`} 
+                        className="reels-feed-item"
+                        data-index={index}
+                    >
                         <VideoCard 
                             video={video} 
                             index={index} 
@@ -342,7 +351,6 @@ export default function ReelsFeed({ onClose }) {
                 .reels-fullscreen { position: fixed; inset: 0; background: #000; z-index: 1000; overflow: hidden; height: 100vh; width: 100vw; }
                 .reels-close-btn { position: fixed; top: 16px; left: 16px; z-index: 1001; background: rgba(0,0,0,0.5); backdrop-filter: blur(12px); border: none; color: #fff; font-size: 22px; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
                 
-                /* FIX: Enhanced rigidity properties for cross-platform containers */
                 .reels-feed-container { 
                     height: 100vh; 
                     width: 100vw; 
@@ -354,7 +362,6 @@ export default function ReelsFeed({ onClose }) {
                 }
                 .reels-feed-container::-webkit-scrollbar { display: none; }
                 
-                /* FIX: scroll-snap-stop forces the layout engine to catch on every immediate boundary */
                 .reels-feed-item { 
                     height: 100vh; 
                     width: 100%; 
