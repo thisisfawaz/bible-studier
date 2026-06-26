@@ -1,20 +1,18 @@
 import { NextResponse } from 'next/server';
 
 const CATEGORIES = [
-  'Healing', 'Miracle', 'Wealth', 'Trust', 'Faith', 
+  'Healing', 'Miracle', 'Wealth', 'Trust', 'Faith',
   'Hope', 'Love', 'Forgiveness', 'Grace', 'Courage',
   'Peace', 'Joy', 'Patience', 'Kindness', 'Wisdom',
   'Strength', 'Deliverance', 'Provision', 'Protection', 'Guidance'
 ];
 
-// Robust JSON parsing
 function extractDevotionFromContent(content) {
   try {
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return parsed;
+        return JSON.parse(jsonMatch[0]);
       } catch (e) {
         let cleaned = jsonMatch[0];
         cleaned = cleaned.replace(/"title":\s*"([^"]*)",\s*"title":/g, '"title":');
@@ -39,7 +37,7 @@ function extractDevotionFromContent(content) {
 export async function POST() {
   try {
     const apiKey = process.env.DEEPSEEK_API_KEY;
-    
+
     if (!apiKey) {
       return NextResponse.json(
         { success: false, error: 'DeepSeek API key not configured' },
@@ -76,13 +74,10 @@ export async function POST() {
 The devotional must be about ONE SPECIFIC REAL PERSON (biblical or modern) who has an inspiring faith story.
 
 IMPORTANT RULES:
-1. The person can be from the BIBLE (Peter, Paul, Moses, David, Esther, etc.) OR from modern history (missionaries, reformers, modern-day believers)
-2. Include a scripture verse with the FULL TEXT of the verse, book, chapter, and verse number
+1. The person can be from the BIBLE (Peter, Paul, Moses, David, Esther, etc.) OR from modern history
+2. Include a scripture verse with the FULL TEXT
 3. The story MUST be between 200-250 words
 4. Include a prayer
-
-BIBLICAL FIGURES: Moses, Abraham, David, Daniel, Esther, Ruth, Elijah, Peter, Paul, James, John, Mary Magdalene, Stephen, Barnabas, Lydia, Hezekiah, Nehemiah
-MODERN FIGURES: William Carey, Hudson Taylor, Amy Carmichael, David Livingstone, Martin Luther, John Wesley, Corrie ten Boom, Dietrich Bonhoeffer, Eric Liddell, Jim Elliot
 
 Format the response as a JSON object with these fields:
 {
@@ -91,10 +86,8 @@ Format the response as a JSON object with these fields:
   "story": "...",
   "prayer": "...",
   "category": "${category}",
-  "person": "Full name of the person the story is about"
-}
-
-Keep the story strictly between 200-250 words.`
+  "person": "Full name of the person"
+}`
           }
         ],
         temperature: 0.8,

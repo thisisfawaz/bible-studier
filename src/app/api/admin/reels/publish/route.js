@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-const DATA_FILE = path.join(process.cwd(), 'data', 'scheduled-devotions.json');
+const DATA_FILE = path.join(process.cwd(), 'data', 'scheduled-reels.json');
 
 function readData() {
   try {
@@ -11,7 +11,7 @@ function readData() {
       return data;
     }
   } catch (error) {
-    console.error('Error reading data:', error);
+    console.error('Error reading reels data:', error);
   }
   return { scheduled: [], published: [] };
 }
@@ -25,20 +25,20 @@ function writeData(data) {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
     return true;
   } catch (error) {
-    console.error('Error writing data:', error);
+    console.error('Error writing reels data:', error);
     return false;
   }
 }
 
 export async function POST(request) {
   try {
-    const { devotion } = await request.json();
+    const { reel } = await request.json();
 
-    console.log('📡 Publishing:', devotion?.title);
+    console.log('📡 Publishing reel:', reel?.title);
 
-    if (!devotion || !devotion.title) {
+    if (!reel || !reel.videoId) {
       return NextResponse.json(
-        { success: false, error: 'Invalid devotion data' },
+        { success: false, error: 'Invalid reel data' },
         { status: 400 }
       );
     }
@@ -46,28 +46,29 @@ export async function POST(request) {
     const data = readData();
 
     // Remove from scheduled
-    data.scheduled = data.scheduled.filter(d => d.id !== devotion.id);
+    data.scheduled = data.scheduled.filter(d => d.id !== reel.id);
 
     // Add to published
-    const publishedDevotion = {
-      ...devotion,
-      id: devotion.id || `dev_${Date.now()}`,
+    const publishedReel = {
+      ...reel,
+      id: reel.id || `reel_${Date.now()}`,
       publishedDate: new Date().toISOString().split('T')[0],
       publishedAt: new Date().toISOString()
     };
-    delete publishedDevotion.scheduleDate;
-    delete publishedDevotion.scheduleTime;
-    delete publishedDevotion.published;
-    delete publishedDevotion.createdAt;
+    delete publishedReel.scheduleDate;
+    delete publishedReel.scheduleTime;
+    delete publishedReel.published;
+    delete publishedReel.createdAt;
+    delete publishedReel.updatedAt;
 
-    data.published.push(publishedDevotion);
+    data.published.push(publishedReel);
 
     writeData(data);
 
-    return NextResponse.json({ success: true, devotion: publishedDevotion });
+    return NextResponse.json({ success: true, reel: publishedReel });
 
   } catch (error) {
-    console.error('Error in publish:', error);
+    console.error('Error publishing reel:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

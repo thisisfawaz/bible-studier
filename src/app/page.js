@@ -189,8 +189,10 @@ export default function Home() {
   useEffect(() => {
     async function loadDailyDevotion() {
       try {
-        const response = await fetch('/api/devotion');
+        const response = await fetch('/api/devotion', { cache: 'no-store' });
         const data = await response.json();
+        console.log('📖 Devotion data:', data);
+        
         if (data.success) {
           setDailyDevotion(data.today);
           setRecentDevotions(data.recent || []);
@@ -208,8 +210,8 @@ export default function Home() {
                 return;
               }
             }
-            // Check if it's a timestamp (AI devotion)
-            const foundRecent = data.recent?.find(d => d.timestamp === devotionParam);
+            // Check if it's a timestamp or id in recent devotions
+            const foundRecent = data.recent?.find(d => d.timestamp === devotionParam || d.id === devotionParam);
             if (foundRecent) {
               setSelectedDevotionId(devotionParam);
               return;
@@ -217,8 +219,15 @@ export default function Home() {
           }
           
           // Default to today's devotion if it exists
-          if (data.today && data.today.timestamp) {
-            setSelectedDevotionId(data.today.timestamp);
+          if (data.today) {
+            // Use id if available, otherwise timestamp
+            const id = data.today.id || data.today.timestamp || 'daily';
+            setSelectedDevotionId(id);
+          } else if (data.recent && data.recent.length > 0) {
+            // If no today devotion, show the most recent
+            const mostRecent = data.recent[0];
+            const id = mostRecent.id || mostRecent.timestamp || 'daily';
+            setSelectedDevotionId(id);
           }
         }
       } catch (err) {
@@ -230,24 +239,25 @@ export default function Home() {
     loadDailyDevotion();
   }, []);
 
-  // Poll every minute to check for new devotions
+  // Poll every 10 minutes to check for new devotions
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const response = await fetch('/api/devotion');
+        const response = await fetch('/api/devotion', { cache: 'no-store' });
         const data = await response.json();
         if (data.success) {
           setDailyDevotion(data.today);
           setRecentDevotions(data.recent || []);
           // Auto-select the new today's devotion if it exists
-          if (data.today && data.today.timestamp) {
-            setSelectedDevotionId(data.today.timestamp);
+          if (data.today) {
+            const id = data.today.id || data.today.timestamp || 'daily';
+            setSelectedDevotionId(id);
           }
         }
       } catch (err) {
         console.error('Poll error:', err);
       }
-    }, 600000);
+    }, 30000); // 10 minutes
     return () => clearInterval(interval);
   }, []);
 
@@ -264,8 +274,8 @@ export default function Home() {
           return;
         }
       }
-      // Check if it's a timestamp
-      const foundRecent = recentDevotions.find(d => d.timestamp === devotionParam);
+      // Check if it's a timestamp or id
+      const foundRecent = recentDevotions.find(d => d.timestamp === devotionParam || d.id === devotionParam);
       if (foundRecent) {
         setSelectedDevotionId(devotionParam);
         setActiveTab('devotions');
@@ -287,9 +297,14 @@ export default function Home() {
       const found = devotions.find(d => d.id === selectedDevotionId);
       if (found) return found;
     }
-    // If selected is a string (timestamp), look in recent AI devotions
+    // If selected is a string (id or timestamp), look in recent devotions
     if (selectedDevotionId !== null && typeof selectedDevotionId === 'string' && selectedDevotionId !== 'daily') {
-      const found = recentDevotions.find(d => d.timestamp === selectedDevotionId);
+      // Try to find by id first
+      let found = recentDevotions.find(d => d.id === selectedDevotionId);
+      // If not found, try by timestamp
+      if (!found) {
+        found = recentDevotions.find(d => d.timestamp === selectedDevotionId);
+      }
       if (found) return found;
     }
     // Return null if nothing found - no fallback to static devotions
@@ -1870,37 +1885,22 @@ export default function Home() {
           ) : (
             <>
               {/* AI-generated devotions from the API (most recent first) */}
-              {recentDevotions.map((devotion, index) => (
-                <div
-                  key={devotion.timestamp || index}
-                  className={`session-item ${selectedDevotionId === devotion.timestamp ? 'active' : ''}`}
-                  onClick={() => selectDevotion(devotion.timestamp)}
-                >
-                  <span className="icon">✨</span>
-                  <div className="session-info">
-                    <div className="session-title">{devotion.title || 'Generated Devotion'}</div>
-                    <div className="session-date">{devotion.category || ''} • {devotion.date || ''}</div>
+              {recentDevotions.map((devotion, index) => {
+                const devotionId = devotion.id || devotion.timestamp || `dev_${index}`;
+                return (
+                  <div
+                    key={devotionId}
+                    className={`session-item ${selectedDevotionId === devotionId ? 'active' : ''}`}
+                    onClick={() => selectDevotion(devotionId)}
+                  >
+                    <span className="icon">✨</span>
+                    <div className="session-info">
+                      <div className="session-title">{devotion.title || 'Generated Devotion'}</div>
+                      <div className="session-date">{devotion.category || ''} • {devotion.date || ''}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
-
-              {/* Divider if both exist */}
-              {/* Divider removed since we're hiding static devotions */}
-
-              {/* Static devotions - COMMENTED OUT (kept for backup) */}
-              {/* {devotions.map((devotion) => (
-                <div
-                  key={devotion.id}
-                  className={`session-item ${selectedDevotionId === devotion.id ? 'active' : ''}`}
-                  onClick={() => selectDevotion(devotion.id)}
-                >
-                  <span className="icon">📖</span>
-                  <div className="session-info">
-                    <div className="session-title">{devotion.title}</div>
-                    <div className="session-date">{devotion.category} • {devotion.date || ''}</div>
-                  </div>
-                </div>
-              ))} */}
+                );
+              })}
             </>
           )}
         </div>
@@ -2119,15 +2119,25 @@ export default function Home() {
             </form>
           </div>
         )}
+      </main>
 
-        {/* Reels Fullscreen Modal */}
-        {showReels && (
+      {/* ===== REELS FULLSCREEN MODAL - RENDERED OUTSIDE MAIN ===== */}
+      {showReels && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 9999,
+          background: '#000',
+        }}>
           <ReelsFeed onClose={() => {
             setShowReels(false);
             setActiveTab('devotions');
           }} />
-        )}
-      </main>
+        </div>
+      )}
     </div>
   );
 }

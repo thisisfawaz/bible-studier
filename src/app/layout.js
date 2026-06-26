@@ -1,4 +1,5 @@
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -55,15 +56,18 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://www.youtube.com" />
         <link rel="preconnect" href="https://www.youtube-nocookie.com" />
         <link rel="dns-prefetch" href="https://www.youtube.com" />
-        <script
+      </head>
+      <body className="min-h-full flex flex-col" style={{ background: '#101012' }}>
+        {/* YouTube API Scripts - Moved to body with Script component */}
+        <Script
           src="https://www.youtube.com/iframe_api"
-          async
-          defer
+          strategy="afterInteractive"
         />
-        <script
+        <Script
+          id="youtube-api-ready"
+          strategy="afterInteractive"
           dangerouslySetInnerHTML={{
             __html: `
-              // Preload YouTube API
               if (typeof window !== 'undefined') {
                 window.YT_READY = false;
                 window.onYouTubeIframeAPIReady = function() {
@@ -74,8 +78,6 @@ export default function RootLayout({ children }) {
             `
           }}
         />
-      </head>
-      <body className="min-h-full flex flex-col" style={{ background: '#101012' }}>
         {children}
       </body>
     </html>

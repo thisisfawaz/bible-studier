@@ -2,23 +2,24 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
+// ADD THIS LINE - Disables Next.js caching for this route
+export const dynamic = 'force-dynamic';
+
 const SCHEDULED_FILE = path.join(process.cwd(), 'data', 'scheduled-devotions.json');
 const MAX_DEVOTIONS = 10;
 
-// Read scheduled devotions data
-function readScheduledData() {
+function getScheduledData() {
   try {
     if (fs.existsSync(SCHEDULED_FILE)) {
       const data = JSON.parse(fs.readFileSync(SCHEDULED_FILE, 'utf8'));
       return data;
     }
   } catch (error) {
-    console.error('Error reading scheduled data:', error);
+    console.error('Error reading scheduled devotions:', error);
   }
   return { scheduled: [], published: [] };
 }
 
-// Write to scheduled devotions data
 function writeScheduledData(data) {
   try {
     const dir = path.dirname(SCHEDULED_FILE);
@@ -33,130 +34,90 @@ function writeScheduledData(data) {
   }
 }
 
-// Format the story with proper paragraph breaks (for backward compatibility)
-function formatStory(story) {
-  if (!story) return '';
-  
-  let paragraphs = story.split(/\n\n/).filter(p => p.trim());
-  
-  if (paragraphs.length <= 1) {
-    paragraphs = story.split(/\n/).filter(p => p.trim());
-  }
-  
-  if (paragraphs.length <= 1) {
-    const sentences = story.split(/\.\s+/).filter(s => s.trim());
-    const sentencesPerParagraph = 4;
-    paragraphs = [];
-    for (let i = 0; i < sentences.length; i += sentencesPerParagraph) {
-      const group = sentences.slice(i, i + sentencesPerParagraph);
-      const paragraphText = group.map((s, idx) => {
-        const trimmed = s.trim();
-        if (idx < group.length - 1 && !trimmed.endsWith('.')) {
-          return trimmed + '.';
-        }
-        return trimmed;
-      }).join('. ');
-      if (paragraphText.trim()) {
-        paragraphs.push(paragraphText.trim());
-      }
-    }
-  }
-  
-  return paragraphs.filter(p => p.trim()).join('\n\n');
-}
-
 export async function GET() {
   try {
-    const data = readScheduledData();
-    
+    const data = getScheduledData();
+    const published = data.published || [];
+    const scheduled = data.scheduled || [];
+
     // Get today's date
     const today = new Date().toISOString().split('T')[0];
     
-    // Check if there's a scheduled devotion for today
-    let todayDevotion = data.scheduled.find(d => d.scheduleDate === today);
+    // Get current time (HH:MM format)
+    const now = new Date();
+    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     
-    // If there's a scheduled devotion for today, auto-publish it
-    if (todayDevotion) {
-      // Remove from scheduled
-      data.scheduled = data.scheduled.filter(d => d.id !== todayDevotion.id);
+    console.log(`📅 Today: ${today}, Current Time: ${currentTime}`);
+
+    // Check for scheduled devotions to publish (date + time)
+    const toPublish = scheduled.filter(d => {
+      return d.scheduleDate === today && d.scheduleTime <= currentTime;
+    });
+
+    if (toPublish.length > 0) {
+      console.log(`📅 Auto-publishing ${toPublish.length} devotions for ${today} at ${currentTime}`);
       
-      // Add to published
-      const publishedDevotion = {
-        ...todayDevotion,
-        publishedDate: today,
-        publishedAt: new Date().toISOString()
-      };
-      delete publishedDevotion.scheduleDate;
-      delete publishedDevotion.scheduleTime;
+      for (const devotion of toPublish) {
+        const publishedDevotion = {
+          ...devotion,
+          id: devotion.id || `dev_${Date.now()}`,
+          publishedDate: today,
+          publishedAt: new Date().toISOString()
+        };
+        delete publishedDevotion.scheduleDate;
+        delete publishedDevotion.scheduleTime;
+        delete publishedDevotion.published;
+        delete publishedDevotion.createdAt;
+        delete publishedDevotion.updatedAt;
+        
+        data.published.push(publishedDevotion);
+        console.log(`✅ Published: "${publishedDevotion.title}"`);
+      }
       
-      data.published.push(publishedDevotion);
+      // Remove published ones from scheduled
+      const publishIds = toPublish.map(d => d.id);
+      data.scheduled = data.scheduled.filter(d => !publishIds.includes(d.id));
+      
       writeScheduledData(data);
     }
-    
-    // Find today's devotion from published list
-    let todayPublished = data.published.find(d => d.publishedDate === today);
-    
-    // If no published devotion for today, show the most recent published
-    if (!todayPublished && data.published.length > 0) {
-      todayPublished = data.published[data.published.length - 1];
-    }
 
-    // Get recent devotions (last 10)
-    const recent = data.published.slice(-MAX_DEVOTIONS).reverse();
+    // Get updated data after auto-publish
+    const updatedData = getScheduledData();
+    const updatedPublished = updatedData.published || [];
+
+    const formattedDevotions = updatedPublished.map(d => ({
+      ...d,
+      id: d.id || `dev_${Date.now()}`,
+      date: d.publishedDate || d.date || new Date().toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
+    }));
+
+    const sorted = [...formattedDevotions].sort((a, b) => {
+      const dateA = new Date(b.publishedAt || b.publishedDate || 0);
+      const dateB = new Date(a.publishedAt || a.publishedDate || 0);
+      return dateA - dateB;
+    });
+
+    const todayDevotion = sorted.length > 0 ? sorted[0] : null;
+    const recent = sorted.slice(0, MAX_DEVOTIONS);
+
+    console.log(`📖 Today: ${todayDevotion?.title || 'None'}`);
+    console.log(`📖 Recent: ${recent.length}`);
 
     return NextResponse.json({
       success: true,
-      today: todayPublished || null,
+      today: todayDevotion || null,
       recent: recent,
-      count: data.published.length,
-      max: MAX_DEVOTIONS,
-      note: 'Devotions are managed through the admin dashboard'
+      count: formattedDevotions.length,
+      max: MAX_DEVOTIONS
     });
 
   } catch (error) {
     console.error('Error in GET:', error);
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(request) {
-  try {
-    const { devotion } = await request.json();
-    
-    if (!devotion || !devotion.title) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid devotion data' },
-        { status: 400 }
-      );
-    }
-
-    const data = readScheduledData();
-    
-    // Format the story with proper paragraph breaks
-    const formattedDevotion = {
-      ...devotion,
-      story: formatStory(devotion.story || ''),
-      id: devotion.id || `dev_${Date.now()}`,
-      publishedDate: new Date().toISOString().split('T')[0],
-      publishedAt: new Date().toISOString()
-    };
-    
-    data.published.push(formattedDevotion);
-    writeScheduledData(data);
-    
-    return NextResponse.json({
-      success: true,
-      devotion: formattedDevotion,
-      recent: data.published.slice(-MAX_DEVOTIONS).reverse(),
-      count: data.published.length,
-      max: MAX_DEVOTIONS
-    });
-    
-  } catch (error) {
-    console.error('Error in POST:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

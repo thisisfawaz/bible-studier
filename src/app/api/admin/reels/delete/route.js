@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-const DATA_FILE = path.join(process.cwd(), 'data', 'scheduled-devotions.json');
+const DATA_FILE = path.join(process.cwd(), 'data', 'scheduled-reels.json');
 
 function readData() {
   try {
@@ -11,7 +11,7 @@ function readData() {
       return data;
     }
   } catch (error) {
-    console.error('Error reading data:', error);
+    console.error('Error reading reels data:', error);
   }
   return { scheduled: [], published: [] };
 }
@@ -25,7 +25,7 @@ function writeData(data) {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
     return true;
   } catch (error) {
-    console.error('Error writing data:', error);
+    console.error('Error writing reels data:', error);
     return false;
   }
 }
@@ -34,7 +34,7 @@ export async function POST(request) {
   try {
     const { id, type } = await request.json();
 
-    console.log('📡 Deleting:', id, type);
+    console.log('📡 Deleting reel:', id, type);
 
     if (!id || !type) {
       return NextResponse.json(
@@ -60,7 +60,7 @@ export async function POST(request) {
     return NextResponse.json({ success: true });
 
   } catch (error) {
-    console.error('Error in delete:', error);
+    console.error('Error deleting reel:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }
