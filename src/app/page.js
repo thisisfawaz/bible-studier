@@ -147,11 +147,12 @@ export default function Home() {
   const [currentSessionId, setCurrentSessionId] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [dailyDevotion, setDailyDevotion] = useState(null);
+  const [recentDevotions, setRecentDevotions] = useState([]);
   const [isGenerating, setIsGenerating] = useState(true);
   const [error, setError] = useState(null);
   const chatEndRef = useRef(null);
 
-  const [selectedDevotionId, setSelectedDevotionId] = useState(devotions[0]?.id || null);
+  const [selectedDevotionId, setSelectedDevotionId] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const currentSession = chatSessions.find(s => s.id === currentSessionId);
@@ -171,7 +172,7 @@ export default function Home() {
 
   const updateUrl = (devotionId) => {
     const url = new URL(window.location);
-    if (devotionId && devotionId !== 'daily') {
+    if (devotionId && devotionId !== 'daily' && devotionId !== null) {
       url.searchParams.set('devotion', devotionId);
     } else {
       url.searchParams.delete('devotion');
@@ -192,18 +193,32 @@ export default function Home() {
         const data = await response.json();
         if (data.success) {
           setDailyDevotion(data.today);
-          if (selectedDevotionId === null || selectedDevotionId === devotions[0]?.id) {
-            const params = new URLSearchParams(window.location.search);
-            const devotionParam = params.get('devotion');
-            if (devotionParam) {
-              const id = parseInt(devotionParam);
+          setRecentDevotions(data.recent || []);
+          
+          // Check URL params first
+          const params = new URLSearchParams(window.location.search);
+          const devotionParam = params.get('devotion');
+          if (devotionParam) {
+            // Check if it's a number (static devotion ID)
+            const id = parseInt(devotionParam);
+            if (!isNaN(id)) {
               const found = devotions.find(d => d.id === id);
               if (found) {
                 setSelectedDevotionId(id);
                 return;
               }
             }
-            setSelectedDevotionId('daily');
+            // Check if it's a timestamp (AI devotion)
+            const foundRecent = data.recent?.find(d => d.timestamp === devotionParam);
+            if (foundRecent) {
+              setSelectedDevotionId(devotionParam);
+              return;
+            }
+          }
+          
+          // Default to today's devotion if it exists
+          if (data.today && data.today.timestamp) {
+            setSelectedDevotionId(data.today.timestamp);
           }
         }
       } catch (err) {
@@ -215,36 +230,69 @@ export default function Home() {
     loadDailyDevotion();
   }, []);
 
+  // Poll every minute to check for new devotions
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch('/api/devotion');
+        const data = await response.json();
+        if (data.success) {
+          setDailyDevotion(data.today);
+          setRecentDevotions(data.recent || []);
+          // Auto-select the new today's devotion if it exists
+          if (data.today && data.today.timestamp) {
+            setSelectedDevotionId(data.today.timestamp);
+          }
+        }
+      } catch (err) {
+        console.error('Poll error:', err);
+      }
+    }, 600000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const devotionParam = params.get('devotion');
     if (devotionParam) {
       const id = parseInt(devotionParam);
-      const found = devotions.find(d => d.id === id);
-      if (found) {
-        setSelectedDevotionId(id);
+      if (!isNaN(id)) {
+        const found = devotions.find(d => d.id === id);
+        if (found) {
+          setSelectedDevotionId(id);
+          setActiveTab('devotions');
+          return;
+        }
+      }
+      // Check if it's a timestamp
+      const foundRecent = recentDevotions.find(d => d.timestamp === devotionParam);
+      if (foundRecent) {
+        setSelectedDevotionId(devotionParam);
         setActiveTab('devotions');
       }
     }
-  }, [devotions]);
+  }, [recentDevotions]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
   const getSelectedDevotion = () => {
+    // If selected is 'daily', return the current daily devotion
     if (selectedDevotionId === 'daily' && dailyDevotion) {
       return dailyDevotion;
     }
+    // If selected is a number, look in static devotions
     if (selectedDevotionId !== null && typeof selectedDevotionId === 'number') {
       const found = devotions.find(d => d.id === selectedDevotionId);
-      if (found) {
-        return found;
-      }
+      if (found) return found;
     }
-    if (devotions.length > 0) {
-      return devotions[0];
+    // If selected is a string (timestamp), look in recent AI devotions
+    if (selectedDevotionId !== null && typeof selectedDevotionId === 'string' && selectedDevotionId !== 'daily') {
+      const found = recentDevotions.find(d => d.timestamp === selectedDevotionId);
+      if (found) return found;
     }
+    // Return null if nothing found - no fallback to static devotions
     return null;
   };
 
@@ -934,7 +982,7 @@ export default function Home() {
         }
         .app.light .card-scripture {
           background: rgba(0,0,0,0.02);
-          border-left: 3px solid #181818 !important;
+          border-left: 3px solid #7c22fe;
           color: #4a4a5e;
         }
         
@@ -942,26 +990,20 @@ export default function Home() {
         .card-story .story-paragraph {
           margin-bottom: 15px !important;
           line-height: 1.8 !important;
-          color: #d6d6d6 !important;
         }
         .card-story .story-paragraph:last-child {
           margin-bottom: 0 !important;
         }
         
-        .app.light .card-story .story-paragraph {
-          color:#222222 !important;
-        }
-
         .prayer-section {
           background: rgba(255,255,255,0.02);
           border-left: 3px solid #ffffff;
           padding: 12px 16px;
           border-radius: 0 6px 6px 0;
           margin-top: 16px;
-          margin-bottom: 30px;
         }
         .app.light .prayer-section {
-          border-left: 3px solid #181818;
+          border-left: 3px solid #7c22fe;
           background: rgba(0,0,0,0.02);
         }
         .prayer-title {
@@ -972,7 +1014,7 @@ export default function Home() {
           letter-spacing: 0.02em;
         }
         .app.light .prayer-title {
-          color: #181818 !important;
+          color: #7c22fe;
         }
         .prayer-text {
           color: #f7f4ef;
@@ -1790,11 +1832,9 @@ export default function Home() {
             className="sidebar-app-title" 
             onClick={(e) => {
               e.preventDefault();
-              // Clear URL parameters
               const url = new URL(window.location);
               url.searchParams.delete('devotion');
               window.history.replaceState({}, '', url);
-              // Force full page reload to homepage
               window.location.href = '/';
             }}
           >
@@ -1829,19 +1869,26 @@ export default function Home() {
             ))
           ) : (
             <>
-              {dailyDevotion && (
+              {/* AI-generated devotions from the API (most recent first) */}
+              {recentDevotions.map((devotion, index) => (
                 <div
-                  className={`session-item ${selectedDevotionId === 'daily' ? 'active' : ''}`}
-                  onClick={() => selectDevotion('daily')}
+                  key={devotion.timestamp || index}
+                  className={`session-item ${selectedDevotionId === devotion.timestamp ? 'active' : ''}`}
+                  onClick={() => selectDevotion(devotion.timestamp)}
                 >
-                  <span className="icon">⭐</span>
+                  <span className="icon">✨</span>
                   <div className="session-info">
-                    <div className="session-title">{dailyDevotion.title || "Today's Devotion"}</div>
-                    <div className="session-date">{dailyDevotion.date || new Date().toLocaleDateString()}</div>
+                    <div className="session-title">{devotion.title || 'Generated Devotion'}</div>
+                    <div className="session-date">{devotion.category || ''} • {devotion.date || ''}</div>
                   </div>
                 </div>
-              )}
-              {devotions.map((devotion) => (
+              ))}
+
+              {/* Divider if both exist */}
+              {/* Divider removed since we're hiding static devotions */}
+
+              {/* Static devotions - COMMENTED OUT (kept for backup) */}
+              {/* {devotions.map((devotion) => (
                 <div
                   key={devotion.id}
                   className={`session-item ${selectedDevotionId === devotion.id ? 'active' : ''}`}
@@ -1853,7 +1900,7 @@ export default function Home() {
                     <div className="session-date">{devotion.category} • {devotion.date || ''}</div>
                   </div>
                 </div>
-              ))}
+              ))} */}
             </>
           )}
         </div>
@@ -1950,9 +1997,16 @@ export default function Home() {
             ) : selectedDevotion ? (
               <div className="devotion-card">
                 <div className="card-header">
-                  <span className={`card-category ${selectedDevotionId === 'daily' ? 'today' : ''}`}>
-                    {selectedDevotionId === 'daily' ? '🌟 Today\'s Devotion' : (selectedDevotion.category || 'Faith')}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span className={`card-category ${selectedDevotionId === 'daily' ? 'today' : ''}`}>
+                      {selectedDevotion.category || 'Faith'}
+                    </span>
+                    {selectedDevotionId === 'daily' && (
+                      <span className="card-category" style={{ background: 'rgba(124, 58, 237, 0.2)', color: '#a78bfa', borderColor: 'rgba(124, 58, 237, 0.3)' }}>
+                        🌟 Today's Devotion
+                      </span>
+                    )}
+                  </div>
                   <span className="card-date">📅 {selectedDevotion.date || ''}</span>
                 </div>
                 <h2 className="card-title">{selectedDevotion.title}</h2>
