@@ -12,9 +12,12 @@ export default function ReelsFeed({ onClose }) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [apiReady, setApiReady] = useState(false);
     const [playerReady, setPlayerReady] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
+    const [showPlayIcon, setShowPlayIcon] = useState(false);
     const containerRef = useRef(null);
     const playerRef = useRef(null);
     const scrollTimeoutRef = useRef(null);
+    const iconTimeoutRef = useRef(null);
 
     // Load YouTube API
     useEffect(() => {
@@ -124,7 +127,9 @@ export default function ReelsFeed({ onClose }) {
                         showinfo: 0,
                         fs: 0,
                         disablekb: 1,
-                        mute: 0
+                        mute: 0,
+                        // Disable keyboard controls
+                        disablekb: 1
                     },
                     events: {
                         onReady: (event) => {
@@ -132,12 +137,31 @@ export default function ReelsFeed({ onClose }) {
                             setPlayerReady(true);
                             console.log('✅ Player ready with playlist');
                             event.target.playVideo();
+                            setIsPaused(false);
+                            setShowPlayIcon(false);
                         },
                         onStateChange: (event) => {
                             if (event.data === window.YT.PlayerState.ENDED) {
                                 const nextIndex = (currentIndex + 1) % videos.length;
                                 setCurrentIndex(nextIndex);
                                 scrollToIndex(nextIndex);
+                            }
+                            if (event.data === window.YT.PlayerState.PAUSED) {
+                                setIsPaused(true);
+                                setShowPlayIcon(true);
+                                if (iconTimeoutRef.current) {
+                                    clearTimeout(iconTimeoutRef.current);
+                                }
+                                iconTimeoutRef.current = setTimeout(() => {
+                                    setShowPlayIcon(false);
+                                }, 2000);
+                            }
+                            if (event.data === window.YT.PlayerState.PLAYING) {
+                                setIsPaused(false);
+                                setShowPlayIcon(false);
+                                if (iconTimeoutRef.current) {
+                                    clearTimeout(iconTimeoutRef.current);
+                                }
                             }
                         },
                         onError: (error) => {
@@ -148,6 +172,34 @@ export default function ReelsFeed({ onClose }) {
             } catch (err) {
                 console.error('Error creating player:', err);
             }
+        }
+    };
+
+    // Toggle play/pause
+    const togglePlayPause = () => {
+        if (!playerRef.current || !playerReady) return;
+
+        try {
+            if (isPaused) {
+                playerRef.current.playVideo();
+                setIsPaused(false);
+                setShowPlayIcon(false);
+                if (iconTimeoutRef.current) {
+                    clearTimeout(iconTimeoutRef.current);
+                }
+            } else {
+                playerRef.current.pauseVideo();
+                setIsPaused(true);
+                setShowPlayIcon(true);
+                if (iconTimeoutRef.current) {
+                    clearTimeout(iconTimeoutRef.current);
+                }
+                iconTimeoutRef.current = setTimeout(() => {
+                    setShowPlayIcon(false);
+                }, 2000);
+            }
+        } catch (err) {
+            console.error('Error toggling play/pause:', err);
         }
     };
 
@@ -185,6 +237,8 @@ export default function ReelsFeed({ onClose }) {
                     if (playerRef.current && playerReady) {
                         console.log('▶️ Playing video at index:', newIndex);
                         playerRef.current.playVideoAt(newIndex);
+                        setIsPaused(false);
+                        setShowPlayIcon(false);
                     }
                 }
             }, 50);
@@ -199,6 +253,53 @@ export default function ReelsFeed({ onClose }) {
         };
     }, [videos.length, currentIndex, playerReady]);
 
+    // Touch/click handler for pause/play
+    const handleVideoClick = (e) => {
+        // Don't trigger if clicking close button
+        if (e.target.closest('.reels-close-btn')) return;
+        togglePlayPause();
+    };
+
+    // Touch handlers for swipe
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        let touchStartY = 0;
+        let touchStartX = 0;
+        let touchStartTime = 0;
+
+        const handleTouchStart = (e) => {
+            touchStartY = e.touches[0].clientY;
+            touchStartX = e.touches[0].clientX;
+            touchStartTime = Date.now();
+        };
+
+        const handleTouchEnd = (e) => {
+            const touchEndY = e.changedTouches[0].clientY;
+            const touchEndX = e.changedTouches[0].clientX;
+            const diffY = touchStartY - touchEndY;
+            const diffX = touchStartX - touchEndX;
+            const timeDiff = Date.now() - touchStartTime;
+
+            // If it's a tap (not a swipe), toggle play/pause
+            if (Math.abs(diffY) < 20 && Math.abs(diffX) < 20 && timeDiff < 300) {
+                e.preventDefault();
+                e.stopPropagation();
+                togglePlayPause();
+                return;
+            }
+        };
+
+        container.addEventListener('touchstart', handleTouchStart, { passive: true });
+        container.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+        return () => {
+            container.removeEventListener('touchstart', handleTouchStart);
+            container.removeEventListener('touchend', handleTouchEnd);
+        };
+    }, []);
+
     // Cleanup
     useEffect(() => {
         return () => {
@@ -206,6 +307,9 @@ export default function ReelsFeed({ onClose }) {
                 try {
                     playerRef.current.destroy();
                 } catch (e) {}
+            }
+            if (iconTimeoutRef.current) {
+                clearTimeout(iconTimeoutRef.current);
             }
         };
     }, []);
@@ -293,8 +397,11 @@ export default function ReelsFeed({ onClose }) {
     }
 
     return (
-        <div className="reels-fullscreen">
-            <button className="reels-close-btn" onClick={onClose}>✕</button>
+        <div className="reels-fullscreen" onClick={handleVideoClick}>
+            <button className="reels-close-btn" onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+            }}>✕</button>
 
             {/* Single Player with Playlist - fills screen */}
             <div 
@@ -318,11 +425,10 @@ export default function ReelsFeed({ onClose }) {
                         className="reels-feed-item"
                         data-index={index}
                     >
-                        <div className="reels-feed-overlay">
-                            <div className="reels-feed-info">
-                                {/* You can add title here if needed */}
-                            </div>
-                        </div>
+                        {/* Play icon overlay when paused */}
+                        {index === currentIndex && showPlayIcon && (
+                            <div className="reels-play-icon">▶</div>
+                        )}
                     </div>
                 ))}
             </div>
@@ -377,14 +483,14 @@ export default function ReelsFeed({ onClose }) {
                     position: relative;
                     z-index: 2;
                     background: transparent;
+                    scrollbar-width: none;
+                    -ms-overflow-style: none;
                 }
 
                 .reels-feed-container::-webkit-scrollbar {
                     display: none;
-                }
-                .reels-feed-container {
-                    -ms-overflow-style: none;
-                    scrollbar-width: none;
+                    width: 0;
+                    background: transparent;
                 }
 
                 .reels-feed-item {
@@ -396,31 +502,32 @@ export default function ReelsFeed({ onClose }) {
                     background: transparent;
                 }
 
-                .reels-feed-overlay {
+                .reels-play-icon {
                     position: absolute;
-                    bottom: 0;
-                    left: 0;
-                    right: 0;
-                    padding: 60px 16px 30px;
-                    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%);
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: flex-end;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    font-size: 64px;
+                    color: #fff;
+                    text-shadow: 0 2px 20px rgba(0,0,0,0.8);
                     pointer-events: none;
-                    z-index: 10;
+                    animation: fadeInOut 0.3s ease;
+                    z-index: 20;
                 }
 
-                .reels-feed-info {
-                    pointer-events: auto;
-                    flex: 1;
+                @keyframes fadeInOut {
+                    from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+                    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
                 }
 
                 @media (max-width: 768px) {
                     .reels-close-btn { top: 12px; left: 12px; width: 36px; height: 36px; font-size: 18px; }
+                    .reels-play-icon { font-size: 48px; }
                 }
 
                 @media (max-width: 480px) {
                     .reels-close-btn { top: 10px; left: 10px; width: 32px; height: 32px; font-size: 16px; }
+                    .reels-play-icon { font-size: 36px; }
                 }
             `}</style>
         </div>
