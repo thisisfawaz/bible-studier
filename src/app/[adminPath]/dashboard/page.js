@@ -38,38 +38,28 @@ export default function AdminDashboard() {
   const [reelScheduleTime, setReelScheduleTime] = useState('08:00');
 
   // Helper function to sort devotions by ID (newest first)
-  // This assumes the ID contains a timestamp or is incrementing
   const sortDevotionsByNewest = (devotionsList) => {
     return [...devotionsList].sort((a, b) => {
-      // If we have a createdAt timestamp, use that
       const timeA = a.createdAt || a.timestamp || a.id || '';
       const timeB = b.createdAt || b.timestamp || b.id || '';
       
-      // If we have numeric IDs or timestamps, compare them
-      // This puts the HIGHEST number (newest) first
       if (typeof timeA === 'number' && typeof timeB === 'number') {
         return timeB - timeA;
       }
       
-      // If we have string IDs (like MongoDB ObjectId), sort by the ID
-      // MongoDB ObjectIds contain timestamps
       if (typeof timeA === 'string' && typeof timeB === 'string') {
         return timeB.localeCompare(timeA);
       }
       
-      // If we have a publishedDate or scheduleDate, use that as fallback
       const dateA = a.publishedDate || a.scheduleDate || '';
       const dateB = b.publishedDate || b.scheduleDate || '';
       
       if (dateA && dateB) {
-        // Sort by date AND time combined
         const combinedA = `${dateA} ${a.scheduleTime || '00:00'}`;
         const combinedB = `${dateB} ${b.scheduleTime || '00:00'}`;
         return combinedB.localeCompare(combinedA);
       }
       
-      // If we have a title with a number, try to extract it
-      // This is a fallback for when we have titles like "Devotion 1", "Devotion 2"
       const numA = parseInt(a.title?.match(/\d+$/)?.[0] || '0');
       const numB = parseInt(b.title?.match(/\d+$/)?.[0] || '0');
       if (numA && numB) {
@@ -106,15 +96,17 @@ export default function AdminDashboard() {
       const response = await fetch('/api/admin/devotions');
       const data = await response.json();
       if (data.success) {
-        // Sort with newest first (based on creation order)
         setDevotions({
           scheduled: sortDevotionsByNewest(data.data.scheduled),
           published: sortDevotionsByNewest(data.data.published)
         });
-        
-        // Log to verify sorting
-        console.log('📖 Sorted Scheduled:', sortDevotionsByNewest(data.data.scheduled).map(d => d.title));
-        console.log('📖 Sorted Published:', sortDevotionsByNewest(data.data.published).map(d => d.title));
+        console.log('📖 Loaded devotions:', {
+          scheduled: data.data.scheduled.length,
+          published: data.data.published.length
+        });
+        console.log('📖 Published devotions:', data.data.published.map(d => d.title));
+      } else {
+        console.error('Failed to load devotions:', data.error);
       }
     } catch (error) {
       console.error('Error loading devotions:', error);
@@ -179,16 +171,16 @@ export default function AdminDashboard() {
       const data = await response.json();
 
       if (data.success) {
-        alert(scheduled ? 'Scheduled!' : 'Published!');
+        alert(scheduled ? '✅ Scheduled!' : '✅ Published!');
         setEditing(null);
         setShowDatePicker(false);
-        loadDevotions();
+        await loadDevotions();
       } else {
-        alert('Failed: ' + (data.error || 'Unknown error'));
+        alert('❌ Failed: ' + (data.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error saving:', error);
-      alert('Error saving: ' + error.message);
+      alert('❌ Error saving: ' + error.message);
     }
   };
 
@@ -208,16 +200,16 @@ export default function AdminDashboard() {
       const data = await response.json();
 
       if (data.success) {
-        alert(scheduled ? 'Reel Scheduled!' : 'Reel Published!');
+        alert(scheduled ? '✅ Reel Scheduled!' : '✅ Reel Published!');
         setEditingReel(null);
         setShowReelDatePicker(false);
-        loadReels();
+        await loadReels();
       } else {
-        alert('Failed: ' + (data.error || 'Unknown error'));
+        alert('❌ Failed: ' + (data.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error saving reel:', error);
-      alert('Error saving reel: ' + error.message);
+      alert('❌ Error saving reel: ' + error.message);
     }
   };
 
@@ -231,7 +223,7 @@ export default function AdminDashboard() {
       });
       const data = await response.json();
       if (data.success) {
-        loadDevotions();
+        await loadDevotions();
       } else {
         alert('Failed to delete: ' + data.error);
       }
@@ -251,7 +243,7 @@ export default function AdminDashboard() {
       });
       const data = await response.json();
       if (data.success) {
-        loadReels();
+        await loadReels();
       } else {
         alert('Failed to delete reel: ' + data.error);
       }
@@ -262,6 +254,8 @@ export default function AdminDashboard() {
   };
 
   const publishDevotion = async (devotion) => {
+    console.log('📤 Publishing devotion:', devotion.title);
+    
     try {
       const response = await fetch('/api/admin/publish', {
         method: 'POST',
@@ -270,16 +264,17 @@ export default function AdminDashboard() {
       });
 
       const data = await response.json();
+      console.log('📥 Publish response:', data);
 
       if (data.success) {
-        alert('Published!');
-        loadDevotions();
+        alert('✅ Published successfully!');
+        await loadDevotions();
       } else {
-        alert('Failed: ' + (data.error || 'Unknown error'));
+        alert('❌ Failed: ' + (data.error || 'Unknown error'));
       }
     } catch (error) {
-      console.error('Error publishing:', error);
-      alert('Error publishing: ' + error.message);
+      console.error('❌ Error publishing:', error);
+      alert('❌ Error publishing: ' + error.message);
     }
   };
 
@@ -294,14 +289,14 @@ export default function AdminDashboard() {
       const data = await response.json();
 
       if (data.success) {
-        alert('Reel Published!');
-        loadReels();
+        alert('✅ Reel Published!');
+        await loadReels();
       } else {
-        alert('Failed: ' + (data.error || 'Unknown error'));
+        alert('❌ Failed: ' + (data.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error publishing reel:', error);
-      alert('Error publishing reel: ' + error.message);
+      alert('❌ Error publishing reel: ' + error.message);
     }
   };
 
