@@ -5,24 +5,15 @@ import { useState, useEffect, useRef } from 'react';
 const VIDEO_CACHE_KEY = 'cached_reels_data';
 const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000;
 
-// Shuffle function
-const shuffleArray = (array) => {
-  const shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-};
-
 export default function ReelsFeed({ onClose }) {
     const [videos, setVideos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [apiReady, setApiReady] = useState(false);
+    const [playerReady, setPlayerReady] = useState(false);
     const containerRef = useRef(null);
-    const playersRef = useRef({});
+    const playerRef = useRef(null);
     const scrollTimeoutRef = useRef(null);
 
     // Load YouTube API
@@ -47,9 +38,6 @@ export default function ReelsFeed({ onClose }) {
 
     const loadVideos = async () => {
         try {
-            console.log('Loading videos...');
-            
-            // Try cache first
             const cached = localStorage.getItem(VIDEO_CACHE_KEY);
             if (cached) {
                 const { videos: cachedVideos, timestamp } = JSON.parse(cached);
@@ -57,88 +45,29 @@ export default function ReelsFeed({ onClose }) {
                 
                 if (cachedVideos && cachedVideos.length > 0 && age < CACHE_DURATION) {
                     console.log('📦 Using cached videos:', cachedVideos.length);
-                    // Shuffle the cached videos
-                    const shuffled = shuffleArray(cachedVideos);
-                    setVideos(shuffled);
+                    setVideos(cachedVideos);
                     setLoading(false);
                     fetchVideosInBackground();
                     return;
                 }
             }
 
-            // Fetch from API with timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const response = await fetch('/api/admin/reels');
+            const data = await response.json();
             
-            try {
-                const response = await fetch('/api/admin/reels', {
-                    signal: controller.signal,
-                    headers: {
-                        'Cache-Control': 'no-cache'
-                    }
-                });
-                clearTimeout(timeoutId);
-                
-                console.log('API Response status:', response.status);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                console.log('API Data:', data);
-                
-                if (data.success && data.data && data.data.published) {
-                    const videoList = data.data.published;
-                    console.log('✅ Published videos:', videoList.length);
-                    
-                    if (videoList.length > 0) {
-                        // Shuffle the videos before storing
-                        const shuffled = shuffleArray(videoList);
-                        localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({
-                            videos: shuffled,
-                            timestamp: Date.now()
-                        }));
-                        setVideos(shuffled);
-                    } else {
-                        setError('No videos found. Please add videos in the admin panel.');
-                    }
-                } else {
-                    console.error('Invalid response structure:', data);
-                    setError('Failed to load videos. Please check the admin panel.');
-                }
-            } catch (fetchError) {
-                clearTimeout(timeoutId);
-                if (fetchError.name === 'AbortError') {
-                    console.error('Request timeout');
-                    setError('Request timed out. Please try again.');
-                } else {
-                    throw fetchError;
-                }
+            if (data.success && data.data && data.data.published.length > 0) {
+                const videoList = data.data.published;
+                localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({
+                    videos: videoList,
+                    timestamp: Date.now()
+                }));
+                setVideos(videoList);
+            } else {
+                setError('No reels found');
             }
         } catch (err) {
             console.error('Error loading videos:', err);
-            // Check if error is from extension
-            if (err.message && err.message.includes('Failed to fetch')) {
-                console.log('Browser extension may be blocking the request. Trying cache fallback...');
-                // Try to get from cache as fallback
-                const cached = localStorage.getItem(VIDEO_CACHE_KEY);
-                if (cached) {
-                    const { videos: cachedVideos } = JSON.parse(cached);
-                    if (cachedVideos && cachedVideos.length > 0) {
-                        console.log('📦 Using cached videos as fallback');
-                        // Shuffle the cached videos
-                        const shuffled = shuffleArray(cachedVideos);
-                        setVideos(shuffled);
-                        setError(null);
-                        setLoading(false);
-                        return;
-                    }
-                }
-                setError('Unable to fetch videos. Please disable ad blockers for this site.');
-            } else {
-                setError(err.message || 'Failed to load videos');
-            }
+            setError(err.message);
         } finally {
             setLoading(false);
         }
@@ -146,87 +75,96 @@ export default function ReelsFeed({ onClose }) {
 
     const fetchVideosInBackground = async () => {
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
-            
-            const response = await fetch('/api/admin/reels', {
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-            
+            const response = await fetch('/api/admin/reels');
             const data = await response.json();
-            if (data.success && data.data && data.data.published && data.data.published.length > 0) {
+            if (data.success && data.data && data.data.published.length > 0) {
                 const videoList = data.data.published;
-                // Shuffle the videos
-                const shuffled = shuffleArray(videoList);
                 localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({
-                    videos: shuffled,
+                    videos: videoList,
                     timestamp: Date.now()
                 }));
-                setVideos(shuffled);
+                setVideos(videoList);
             }
         } catch (err) {
-            console.log('Background update failed:', err.message);
+            console.log('Background update failed');
         }
     };
 
-    // Initialize all players
+    // Initialize single player with PLAYLIST
     useEffect(() => {
         if (apiReady && videos.length > 0 && !loading) {
-            console.log('🎬 Initializing players for', videos.length, 'videos');
-            initializePlayers();
+            initializePlayer();
         }
     }, [apiReady, videos, loading]);
 
-    const initializePlayers = () => {
-        videos.forEach((video, index) => {
-            const elementId = `player-${index}`;
-            const element = document.getElementById(elementId);
-            
-            if (element && !playersRef.current[index]) {
-                const videoId = video.videoId || video.id;
-                console.log(`Creating player ${index}:`, videoId);
+    const initializePlayer = () => {
+        const elementId = 'reels-player';
+        const element = document.getElementById(elementId);
+        
+        if (element && !playerRef.current) {
+            try {
+                const videoIds = videos.map(v => v.videoId || v.id);
+                console.log('🎬 Creating playlist with:', videoIds.length, 'videos');
                 
-                try {
-                    const player = new window.YT.Player(elementId, {
-                        height: '100%',
-                        width: '100%',
-                        videoId: videoId,
-                        playerVars: {
-                            autoplay: 0,
-                            controls: 0,
-                            rel: 0,
-                            modestbranding: 1,
-                            playsinline: 1,
-                            origin: window.location.origin,
-                            enablejsapi: 1,
-                            iv_load_policy: 3,
-                            showinfo: 0,
-                            fs: 0,
-                            disablekb: 1,
-                            mute: 0
+                const player = new window.YT.Player(elementId, {
+                    height: '100%',
+                    width: '100%',
+                    videoId: videoIds[0],
+                    playerVars: {
+                        autoplay: 1,
+                        controls: 0,
+                        rel: 0,
+                        loop: 1,
+                        playlist: videoIds.join(','),
+                        modestbranding: 1,
+                        playsinline: 1,
+                        origin: window.location.origin,
+                        enablejsapi: 1,
+                        iv_load_policy: 3,
+                        showinfo: 0,
+                        fs: 0,
+                        disablekb: 1,
+                        mute: 0
+                    },
+                    events: {
+                        onReady: (event) => {
+                            playerRef.current = event.target;
+                            setPlayerReady(true);
+                            console.log('✅ Player ready with playlist');
+                            event.target.playVideo();
                         },
-                        events: {
-                            onReady: (event) => {
-                                playersRef.current[index] = event.target;
-                                console.log(`✅ Player ${index} ready`);
-                                if (index === 0) {
-                                    event.target.playVideo();
-                                }
-                            },
-                            onError: (error) => {
-                                console.error(`❌ Player ${index} error:`, error);
+                        onStateChange: (event) => {
+                            if (event.data === window.YT.PlayerState.ENDED) {
+                                const nextIndex = (currentIndex + 1) % videos.length;
+                                setCurrentIndex(nextIndex);
+                                scrollToIndex(nextIndex);
                             }
+                        },
+                        onError: (error) => {
+                            console.error('Player error:', error);
                         }
-                    });
-                } catch (err) {
-                    console.error(`Error creating player ${index}:`, err);
-                }
+                    }
+                });
+            } catch (err) {
+                console.error('Error creating player:', err);
             }
-        });
+        }
     };
 
-    // Handle scroll to control which video plays
+    const scrollToIndex = (index) => {
+        const container = containerRef.current;
+        if (!container) return;
+        
+        const children = container.children;
+        if (children && children[index]) {
+            container.scrollTo({
+                top: children[index].offsetTop,
+                behavior: 'smooth'
+            });
+        }
+    };
+
+    // Handle scroll to update current index
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -242,8 +180,12 @@ export default function ReelsFeed({ onClose }) {
                 const newIndex = Math.round(scrollTop / slideHeight);
                 
                 if (newIndex !== currentIndex && newIndex >= 0 && newIndex < videos.length) {
-                    console.log('Scrolling to index:', newIndex);
                     setCurrentIndex(newIndex);
+                    
+                    if (playerRef.current && playerReady) {
+                        console.log('▶️ Playing video at index:', newIndex);
+                        playerRef.current.playVideoAt(newIndex);
+                    }
                 }
             }, 50);
         };
@@ -255,53 +197,16 @@ export default function ReelsFeed({ onClose }) {
                 clearTimeout(scrollTimeoutRef.current);
             }
         };
-    }, [videos.length, currentIndex]);
+    }, [videos.length, currentIndex, playerReady]);
 
-    // Control video playback based on current index
-    useEffect(() => {
-        if (videos.length === 0) return;
-        
-        // Pause all videos first
-        Object.keys(playersRef.current).forEach((key) => {
-            const player = playersRef.current[key];
-            if (player && typeof player.pauseVideo === 'function') {
-                try {
-                    player.pauseVideo();
-                } catch (e) {
-                    // Ignore errors
-                }
-            }
-        });
-
-        // Play the current video
-        const currentPlayer = playersRef.current[currentIndex];
-        if (currentPlayer && typeof currentPlayer.playVideo === 'function') {
-            try {
-                console.log('▶️ Playing video at index:', currentIndex);
-                currentPlayer.seekTo(0);
-                setTimeout(() => {
-                    currentPlayer.playVideo();
-                }, 100);
-            } catch (e) {
-                console.error('Error playing video:', e);
-            }
-        }
-    }, [currentIndex, videos.length]);
-
-    // Cleanup players on unmount
+    // Cleanup
     useEffect(() => {
         return () => {
-            Object.keys(playersRef.current).forEach((key) => {
-                const player = playersRef.current[key];
-                if (player && typeof player.destroy === 'function') {
-                    try {
-                        player.destroy();
-                    } catch (e) {
-                        // Ignore errors
-                    }
-                }
-            });
-            playersRef.current = {};
+            if (playerRef.current && typeof playerRef.current.destroy === 'function') {
+                try {
+                    playerRef.current.destroy();
+                } catch (e) {}
+            }
         };
     }, []);
 
@@ -344,12 +249,12 @@ export default function ReelsFeed({ onClose }) {
         );
     }
 
-    if (error && videos.length === 0) {
+    if (error || videos.length === 0) {
         return (
             <div className="reels-fullscreen empty">
                 <div className="reels-empty-icon">🎬</div>
-                <h3>{error}</h3>
-                <p>Try disabling ad blockers or refresh the page.</p>
+                <h3>{error || 'No Reels Available'}</h3>
+                <p>Check back later for new content!</p>
                 <button onClick={onClose} className="reels-close-btn-bottom">Close</button>
                 <style jsx>{`
                     .reels-fullscreen.empty {
@@ -391,30 +296,35 @@ export default function ReelsFeed({ onClose }) {
         <div className="reels-fullscreen">
             <button className="reels-close-btn" onClick={onClose}>✕</button>
 
+            {/* Single Player with Playlist - fills screen */}
+            <div 
+                id="reels-player" 
+                style={{
+                    position: 'fixed',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    zIndex: 1,
+                    background: '#000',
+                    pointerEvents: 'none'
+                }}
+            />
+
+            {/* Scrollable slides - just for overlay and scroll detection */}
             <div className="reels-feed-container" ref={containerRef}>
-                {videos.map((video, index) => {
-                    const videoId = video.videoId || video.id;
-                    return (
-                        <div
-                            key={`${videoId}-${index}`}
-                            className="reels-feed-item"
-                            data-index={index}
-                        >
-                            <div className="reels-feed-video-wrapper">
-                                <div 
-                                    id={`player-${index}`} 
-                                    className="reels-feed-video"
-                                />
-                            </div>
-                            {/* Overlay without title - removed the title display */}
-                            <div className="reels-feed-overlay">
-                                <div className="reels-feed-info">
-                                    {/* Title removed - no text shown */}
-                                </div>
+                {videos.map((video, index) => (
+                    <div
+                        key={`${video.videoId || video.id}-${index}`}
+                        className="reels-feed-item"
+                        data-index={index}
+                    >
+                        <div className="reels-feed-overlay">
+                            <div className="reels-feed-info">
+                                {/* You can add title here if needed */}
                             </div>
                         </div>
-                    );
-                })}
+                    </div>
+                ))}
             </div>
 
             <style jsx>{`
@@ -464,6 +374,9 @@ export default function ReelsFeed({ onClose }) {
                     scroll-behavior: smooth;
                     -webkit-overflow-scrolling: touch;
                     touch-action: pan-y;
+                    position: relative;
+                    z-index: 2;
+                    background: transparent;
                 }
 
                 .reels-feed-container::-webkit-scrollbar {
@@ -480,29 +393,7 @@ export default function ReelsFeed({ onClose }) {
                     position: relative;
                     flex-shrink: 0;
                     scroll-snap-align: start;
-                    overflow: hidden;
-                    background: #000;
-                }
-
-                .reels-feed-video-wrapper {
-                    width: 100%;
-                    height: 100%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    background: #000;
-                }
-
-                .reels-feed-video {
-                    width: 100%;
-                    height: 100%;
-                    max-width: 400px;
-                    aspect-ratio: 9 / 16;
-                    background: #000;
-                }
-
-                .reels-feed-video iframe {
-                    pointer-events: none !important;
+                    background: transparent;
                 }
 
                 .reels-feed-overlay {
@@ -526,7 +417,6 @@ export default function ReelsFeed({ onClose }) {
 
                 @media (max-width: 768px) {
                     .reels-close-btn { top: 12px; left: 12px; width: 36px; height: 36px; font-size: 18px; }
-                    .reels-feed-video { max-width: 100%; }
                 }
 
                 @media (max-width: 480px) {
