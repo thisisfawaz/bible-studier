@@ -159,8 +159,8 @@ function VideoCard({ video, index, isActive, apiReady }) {
     const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
 
     return (
-        <div ref={containerRef} className="reels-feed-video-wrapper" onClick={handleVideoClick}>
-            <div className="reels-aspect-sandbox">
+        <div className="reels-feed-video-wrapper" onClick={handleVideoClick}>
+            <div ref={containerRef} className="reels-aspect-sandbox">
                 <div 
                     id={playerContainerId} 
                     className="reels-feed-video"
@@ -215,15 +215,16 @@ export default function ReelsFeed({ onClose }) {
                 const { videos: cachedVideos, timestamp } = JSON.parse(cached);
                 const age = Date.now() - timestamp;
                 
+                // If cache exists and hasn't expired, load it instantly and trigger silent background sync
                 if (cachedVideos && cachedVideos.length > 0 && age < CACHE_DURATION) {
-                    const shuffled = shuffleArray(cachedVideos);
-                    setVideos(shuffled);
+                    setVideos(cachedVideos);
                     setLoading(false);
                     fetchVideosInBackground();
                     return;
                 }
             }
 
+            // Fallback strategy if cache is empty on cold first load
             const response = await fetch('/api/admin/reels');
             const data = await response.json();
             
@@ -252,18 +253,20 @@ export default function ReelsFeed({ onClose }) {
             if (data.success && data.data && data.data.published.length > 0) {
                 const videoList = data.data.published;
                 const shuffled = shuffleArray(videoList);
+                
+                // SILENT CACHE SYNC: We update cache for the next cold session boot
+                // We intentionally do NOT call setVideos() here so we don't break/stutter the active scroll session
                 localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({
                     videos: shuffled,
                     timestamp: Date.now()
                 }));
-                setVideos(shuffled);
             }
         } catch (err) {
-            console.log('Background update failed');
+            console.log('Background update failed silently');
         }
     };
 
-    // FIX: Using intersection observer directly on items inside the snap container for absolute sync accuracy
+    // Track active item positions cleanly via an observer instance attached to items inside the scroll-snapping track layout
     useEffect(() => {
         const container = containerRef.current;
         if (!container || videos.length === 0) return;
@@ -271,7 +274,7 @@ export default function ReelsFeed({ onClose }) {
         const observerOptions = {
             root: container,
             rootMargin: '0px',
-            threshold: 0.6 // Card must be 60% visible before it toggles state
+            threshold: 0.6 // Element cards must be 60% visible before triggering status change updates
         };
 
         const observerCallback = (entries) => {
@@ -287,7 +290,6 @@ export default function ReelsFeed({ onClose }) {
 
         const observer = new IntersectionObserver(observerCallback, observerOptions);
         
-        // Target children of container
         const children = container.querySelectorAll('.reels-feed-item');
         children.forEach((child) => observer.observe(child));
 

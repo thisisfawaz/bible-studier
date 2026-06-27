@@ -67,7 +67,11 @@ export async function POST() {
         messages: [
           {
             role: 'system',
-            content: `You are a devotional writer. Create inspiring devotionals based on REAL faith stories from the Bible or modern history. Return ONLY valid JSON.`
+            content: `You are a devotional writer. Create inspiring devotionals based on REAL faith stories from the Bible or modern history. 
+            
+            IMPORTANT FORMATTING: Always break the story into 3-4 short paragraphs. Use double line breaks (\n\n) between paragraphs. The story should be easy to read with clear paragraph breaks.
+            
+            Return ONLY valid JSON.`
           },
           {
             role: 'user',
@@ -80,12 +84,13 @@ IMPORTANT RULES:
 2. Include a scripture verse with the FULL TEXT
 3. The story MUST be between 200-250 words
 4. Include a prayer
+5. **IMPORTANT: Format the story with proper paragraph breaks. Use TWO new lines (\n\n) between each paragraph. The story should have 3-4 short paragraphs, not one giant block of text.**
 
 Format the response as a JSON object with these fields:
 {
   "title": "...",
   "scripture": "...",
-  "story": "...",
+  "story": "...",  // Use \n\n between paragraphs
   "prayer": "...",
   "category": "${category}",
   "person": "Full name of the person"

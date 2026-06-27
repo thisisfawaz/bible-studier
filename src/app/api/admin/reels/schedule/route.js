@@ -2,6 +2,38 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+// Function to extract video ID from YouTube URL
+function extractVideoId(url) {
+  if (!url) return null;
+  
+  // Trim whitespace
+  const trimmedUrl = url.trim();
+  
+  // If it's already just an ID (no slashes or query params, and looks like a video ID)
+  if (!trimmedUrl.includes('/') && !trimmedUrl.includes('?') && trimmedUrl.length <= 20) {
+    return trimmedUrl;
+  }
+  
+  // Try all YouTube URL patterns
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=)([\w-]+)/,
+    /(?:youtu\.be\/)([\w-]+)/,
+    /(?:youtube\.com\/shorts\/)([\w-]+)/,
+    /(?:youtube\.com\/embed\/)([\w-]+)/,
+    /(?:youtube\.com\/v\/)([\w-]+)/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = trimmedUrl.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+  
+  // If no pattern matches, return the original (maybe it's just an ID)
+  return trimmedUrl;
+}
+
 export async function POST(request) {
   try {
     const { reel, scheduled, scheduleDate, scheduleTime } = await request.json();
@@ -15,9 +47,21 @@ export async function POST(request) {
       );
     }
 
+    // Extract the video ID from the URL
+    const videoId = extractVideoId(reel.videoId);
+    
+    if (!videoId) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid YouTube URL' },
+        { status: 400 }
+      );
+    }
+
+    console.log('📡 Extracted video ID:', videoId);
+
     const data = {
       id: reel.id || `reel_${Date.now()}`,
-      video_id: reel.videoId,  // ← Frontend sends videoId, we save as video_id
+      video_id: videoId,  // ← Store just the video ID
       title: reel.title || `Reel ${new Date().toISOString()}`,
       status: scheduled ? 'scheduled' : 'published',
       schedule_date: scheduled ? scheduleDate : null,
