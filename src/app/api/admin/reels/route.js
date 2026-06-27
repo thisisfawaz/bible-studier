@@ -9,7 +9,7 @@ export async function GET() {
       .from('reels')
       .select('*')
       .eq('status', 'scheduled')
-      .order('schedule_date', { ascending: false });
+      .order('schedule_date', { ascending: false, nullsFirst: false });
 
     if (scheduledError) throw scheduledError;
 
@@ -18,13 +18,24 @@ export async function GET() {
       .from('reels')
       .select('*')
       .eq('status', 'published')
-      .order('published_date', { ascending: false });
+      .order('published_at', { ascending: false, nullsFirst: false });
 
     if (publishedError) throw publishedError;
 
+    // Transform video_id to videoId for frontend
+    const transformReels = (reels) => {
+      return (reels || []).map(reel => ({
+        ...reel,
+        videoId: reel.video_id  // ← Add videoId for frontend
+      }));
+    };
+
     return NextResponse.json({
       success: true,
-      data: { scheduled: scheduled || [], published: published || [] }
+      data: { 
+        scheduled: transformReels(scheduled), 
+        published: transformReels(published) 
+      }
     });
 
   } catch (error) {

@@ -4,13 +4,11 @@ import { supabase } from '@/lib/supabase';
 
 export async function POST(request) {
   try {
-    const body = await request.json();
-    console.log('📡 Full request body:', body);
+    const { reel, scheduled, scheduleDate, scheduleTime } = await request.json();
 
-    const { reel, scheduled, scheduleDate, scheduleTime } = body;
+    console.log('📡 Received reel:', reel);
 
     if (!reel || !reel.videoId) {
-      console.log('❌ Missing videoId');
       return NextResponse.json(
         { success: false, error: 'Missing videoId' },
         { status: 400 }
@@ -19,12 +17,13 @@ export async function POST(request) {
 
     const data = {
       id: reel.id || `reel_${Date.now()}`,
-      video_id: reel.videoId,
+      video_id: reel.videoId,  // ← Frontend sends videoId, we save as video_id
       title: reel.title || `Reel ${new Date().toISOString()}`,
       status: scheduled ? 'scheduled' : 'published',
       schedule_date: scheduled ? scheduleDate : null,
       schedule_time: scheduled ? scheduleTime : null,
       published_date: scheduled ? null : new Date().toISOString().split('T')[0],
+      published_at: scheduled ? null : new Date().toISOString(),
       created_at: new Date().toISOString()
     };
 
@@ -35,7 +34,7 @@ export async function POST(request) {
       }
     });
 
-    console.log('📡 Data being saved:', data);
+    console.log('📡 Saving to Supabase:', data);
 
     const { data: result, error } = await supabase
       .from('reels')
@@ -50,11 +49,17 @@ export async function POST(request) {
       );
     }
 
-    console.log('✅ Reel saved successfully:', result);
+    // Convert video_id back to videoId for frontend
+    const savedReel = result?.[0];
+    if (savedReel) {
+      savedReel.videoId = savedReel.video_id;
+    }
+
+    console.log('✅ Reel saved:', savedReel);
 
     return NextResponse.json({
       success: true,
-      reel: result?.[0] || data
+      reel: savedReel || data
     });
 
   } catch (error) {
