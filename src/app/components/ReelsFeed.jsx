@@ -22,12 +22,15 @@ function VideoCard({ video, index, isActive, apiReady }) {
     const containerRef = useRef(null);
     const [isNearViewport, setIsNearViewport] = useState(false);
     const [videoStarted, setVideoStarted] = useState(false);
+    // New state to manage the loading spinner overlay for this specific video
+    const [isVideoLoading, setIsVideoLoading] = useState(true);
 
     const isActiveRef = useRef(isActive);
     useEffect(() => {
         isActiveRef.current = isActive;
         if (!isActive) {
             setVideoStarted(false);
+            setIsVideoLoading(true); // Reset loading state when scrolling away
             if (playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
                 try { playerRef.current.pauseVideo(); } catch (e) {}
             }
@@ -105,9 +108,15 @@ function VideoCard({ video, index, isActive, apiReady }) {
                             }
                         },
                         onStateChange: (event) => {
+                            // Video is fully playing (not buffering or just thumbnail showing)
                             if (event.data === window.YT.PlayerState.PLAYING) {
                                 setVideoStarted(true);
+                                setIsVideoLoading(false); // Hide spinner
                                 forceDisableCaptions(event.target);
+                            }
+                            // Show loader if the video enters buffering mode mid-play
+                            if (event.data === window.YT.PlayerState.BUFFERING) {
+                                setIsVideoLoading(true);
                             }
                             if (event.data === window.YT.PlayerState.ENDED) {
                                 event.target.seekTo(0);
@@ -123,6 +132,7 @@ function VideoCard({ video, index, isActive, apiReady }) {
     useEffect(() => {
         if (playerRef.current && typeof playerRef.current.playVideo === 'function') {
             if (isActive) {
+                setIsVideoLoading(true); // Ensure loader shows up on layout snap change
                 playerRef.current.seekTo(0);
                 if (typeof playerRef.current.unMute === 'function') {
                     playerRef.current.unMute();
@@ -175,6 +185,14 @@ function VideoCard({ video, index, isActive, apiReady }) {
                         className="reels-feed-video object-cover absolute inset-0 z-10 pointer-events-none" 
                     />
                 )}
+
+                {/* Per-video Loader: visible whenever the active video is compiling or buffering */}
+                {isActive && isVideoLoading && (
+                    <div className="video-card-loader-overlay">
+                        <div className="card-spinner"></div>
+                        <p className="card-loader-text">Loading message...</p>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -215,7 +233,6 @@ export default function ReelsFeed({ onClose }) {
                 const { videos: cachedVideos, timestamp } = JSON.parse(cached);
                 const age = Date.now() - timestamp;
                 
-                // If cache exists and hasn't expired, load it instantly and trigger silent background sync
                 if (cachedVideos && cachedVideos.length > 0 && age < CACHE_DURATION) {
                     setVideos(cachedVideos);
                     setLoading(false);
@@ -224,7 +241,6 @@ export default function ReelsFeed({ onClose }) {
                 }
             }
 
-            // Fallback strategy if cache is empty on cold first load
             const response = await fetch('/api/admin/reels');
             const data = await response.json();
             
@@ -254,8 +270,6 @@ export default function ReelsFeed({ onClose }) {
                 const videoList = data.data.published;
                 const shuffled = shuffleArray(videoList);
                 
-                // SILENT CACHE SYNC: We update cache for the next cold session boot
-                // We intentionally do NOT call setVideos() here so we don't break/stutter the active scroll session
                 localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({
                     videos: shuffled,
                     timestamp: Date.now()
@@ -266,7 +280,6 @@ export default function ReelsFeed({ onClose }) {
         }
     };
 
-    // Track active item positions cleanly via an observer instance attached to items inside the scroll-snapping track layout
     useEffect(() => {
         const container = containerRef.current;
         if (!container || videos.length === 0) return;
@@ -274,7 +287,7 @@ export default function ReelsFeed({ onClose }) {
         const observerOptions = {
             root: container,
             rootMargin: '0px',
-            threshold: 0.6 // Element cards must be 60% visible before triggering status change updates
+            threshold: 0.6
         };
 
         const observerCallback = (entries) => {
@@ -397,6 +410,40 @@ export default function ReelsFeed({ onClose }) {
                     top: 0 !important;
                     left: 0 !important;
                     object-fit: cover !important;
+                }
+
+                /* Inside-Card Loader Styles */
+                :global(.video-card-loader-overlay) {
+                    position: absolute;
+                    inset: 0;
+                    background: rgba(0, 0, 0, 0.7);
+                    z-index: 20;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 14px;
+                    pointer-events: none;
+                }
+
+                :global(.card-spinner) {
+                    width: 36px;
+                    height: 36px;
+                    border: 3px solid rgba(255, 255, 255, 0.1);
+                    border-top-color: #7c3aed;
+                    border-radius: 50%;
+                    animation: cardSpin 0.8s linear infinite;
+                }
+
+                :global(.card-loader-text) {
+                    font-size: 14px;
+                    color: rgba(255, 255, 255, 0.9);
+                    margin: 0;
+                    letter-spacing: 0.3px;
+                }
+
+                @keyframes cardSpin {
+                    to { transform: rotate(360deg); }
                 }
                 
                 :global(.object-cover) { object-fit: cover; }
