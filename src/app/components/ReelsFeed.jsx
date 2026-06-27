@@ -20,10 +20,16 @@ function VideoCard({ video, index, isActive, apiReady }) {
     const playerContainerId = `player-container-${index}`;
     const playerRef = useRef(null);
     const containerRef = useRef(null);
+    const progressBarRef = useRef(null);
+    
     const [isNearViewport, setIsNearViewport] = useState(false);
     const [videoStarted, setVideoStarted] = useState(false);
-    // State to manage the loading spinner overlay for this specific video
     const [isVideoLoading, setIsVideoLoading] = useState(true);
+    
+    // Progress tracking and scrubbing states
+    const [progress, setProgress] = useState(0);
+    const [isScrubbing, setIsScrubbing] = useState(false);
+    const progressIntervalRef = useRef(null);
 
     // Track if the video has started playing at least once during this active session
     const hasPlayedOnceRef = useRef(false);
@@ -35,6 +41,8 @@ function VideoCard({ video, index, isActive, apiReady }) {
             setVideoStarted(false);
             setIsVideoLoading(true); // Reset loading state when scrolling away
             hasPlayedOnceRef.current = false; // Reset playback tracker
+            setProgress(0);
+            stopProgressTracker();
             if (playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
                 try { playerRef.current.pauseVideo(); } catch (e) {}
             }
@@ -56,8 +64,33 @@ function VideoCard({ video, index, isActive, apiReady }) {
         );
 
         if (containerRef.current) observer.observe(containerRef.current);
-        return () => observer.disconnect();
+        return () => {
+            observer.disconnect();
+            stopProgressTracker();
+        };
     }, []);
+
+    const startProgressTracker = () => {
+        stopProgressTracker();
+        progressIntervalRef.current = setInterval(() => {
+            if (isScrubbing) return; // Don't let interval override manual drag values
+            if (playerRef.current && typeof playerRef.current.getCurrentTime === 'function' && typeof playerRef.current.getDuration === 'function') {
+                const currentTime = playerRef.current.getCurrentTime();
+                const duration = playerRef.current.getDuration();
+                if (duration > 0) {
+                    const percentage = (currentTime / duration) * 100;
+                    setProgress(percentage);
+                }
+            }
+        }, 100);
+    };
+
+    const stopProgressTracker = () => {
+        if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+            progressIntervalRef.current = null;
+        }
+    };
 
     const forceDisableCaptions = (player) => {
         if (!player) return;
@@ -118,8 +151,13 @@ function VideoCard({ video, index, isActive, apiReady }) {
                                 setIsVideoLoading(false); // Hide custom spinner
                                 hasPlayedOnceRef.current = true; // Mark as played at least once
                                 forceDisableCaptions(event.target);
+                                startProgressTracker();
                             }
                             
+                            if (event.data === window.YT.PlayerState.PAUSED || event.data === window.YT.PlayerState.ENDED) {
+                                stopProgressTracker();
+                            }
+
                             // Show custom loader only if it is buffering for the first time
                             if (event.data === window.YT.PlayerState.BUFFERING) {
                                 if (!hasPlayedOnceRef.current) {
@@ -143,6 +181,7 @@ function VideoCard({ video, index, isActive, apiReady }) {
             if (isActive) {
                 setIsVideoLoading(true); // Ensure loader shows up on layout snap change
                 hasPlayedOnceRef.current = false;
+                setProgress(0);
                 playerRef.current.seekTo(0);
                 if (typeof playerRef.current.unMute === 'function') {
                     playerRef.current.unMute();
@@ -152,6 +191,7 @@ function VideoCard({ video, index, isActive, apiReady }) {
                 try { playerRef.current.playVideo(); } catch (e) {}
             } else {
                 try { playerRef.current.pauseVideo(); } catch (e) {}
+                stopProgressTracker();
             }
         }
     }, [isActive]);
@@ -161,6 +201,7 @@ function VideoCard({ video, index, isActive, apiReady }) {
             if (playerRef.current && typeof playerRef.current.destroy === 'function') {
                 try { playerRef.current.destroy(); } catch (e) {}
             }
+            stopProgressTracker();
         };
     }, []);
 
@@ -174,6 +215,76 @@ function VideoCard({ video, index, isActive, apiReady }) {
                 playerRef.current.playVideo();
             }
         }
+    };
+
+    // --- Interactive Scrubbing Logic ---
+    const calculateScrubPercentage = (clientX) => {
+        if (!progressBarRef.current) return 0;
+        const rect = progressBarRef.current.getBoundingClientRect();
+        const offsetX = clientX - rect.left;
+        const percentage = Math.max(0, Math.min(1, offsetX / rect.width)) * 100;
+        return percentage;
+    };
+
+    const performSeekToPercentage = (percentage) => {
+        if (playerRef.current && typeof playerRef.current.getDuration === 'function' && typeof playerRef.current.seekTo === 'function') {
+            const duration = playerRef.current.getDuration();
+            if (duration > 0) {
+                const targetTime = (percentage / 100) * duration;
+                playerRef.current.seekTo(targetTime, true);
+            }
+        }
+    };
+
+    const handleScrubMove = (clientX) => {
+        const newPercentage = calculateScrubPercentage(clientX);
+        setProgress(newPercentage);
+    };
+
+    const handleScrubStart = (e, clientX) => {
+        e.stopPropagation(); // Avoid triggering video play/pause click logic
+        setIsScrubbing(true);
+        stopProgressTracker();
+        
+        const startingPercentage = calculateScrubPercentage(clientX);
+        setProgress(startingPercentage);
+
+        const onMouseMove = (moveEvent) => {
+            handleScrubMove(moveEvent.clientX);
+        };
+
+        const onTouchMove = (touchEvent) => {
+            if (touchEvent.touches && touchEvent.touches[0]) {
+                handleScrubMove(touchEvent.touches[0].clientX);
+            }
+        };
+
+        const onScrubEnd = (endEvent) => {
+            let finalX = clientX;
+            if (endEvent.clientX !== undefined) {
+                finalX = endEvent.clientX;
+            } else if (endEvent.changedTouches && endEvent.changedTouches[0]) {
+                finalX = endEvent.changedTouches[0].clientX;
+            }
+            
+            const finalPercentage = calculateScrubPercentage(finalX);
+            performSeekToPercentage(finalPercentage);
+            setIsScrubbing(false);
+            
+            // Cleanup event listeners
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onScrubEnd);
+            window.removeEventListener('touchmove', onTouchMove);
+            window.removeEventListener('touchend', onScrubEnd);
+            
+            // Resume regular tracking interval updates
+            startProgressTracker();
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onScrubEnd);
+        window.addEventListener('touchmove', onTouchMove, { passive: true });
+        window.addEventListener('touchend', onScrubEnd);
     };
 
     const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
@@ -194,6 +305,31 @@ function VideoCard({ video, index, isActive, apiReady }) {
                         alt="Preview" 
                         className="reels-feed-video object-cover absolute inset-0 z-10 pointer-events-none" 
                     />
+                )}
+
+                {/* Custom Interactive Progress Bar & Head/Thumb Scrubber */}
+                {isActive && videoStarted && (
+                    <div 
+                        ref={progressBarRef}
+                        className="reels-custom-progress-bar-container"
+                        onMouseDown={(e) => handleScrubStart(e, e.clientX)}
+                        onTouchStart={(e) => {
+                            if (e.touches && e.touches[0]) {
+                                handleScrubStart(e, e.touches[0].clientX);
+                            }
+                        }}
+                    >
+                        <div className="reels-custom-progress-bar-track">
+                            <div 
+                                className="reels-custom-progress-bar-fill" 
+                                style={{ width: `${progress}%` }}
+                            />
+                            <div 
+                                className="reels-custom-progress-bar-thumb" 
+                                style={{ left: `${progress}%` }}
+                            />
+                        </div>
+                    </div>
                 )}
 
                 {/* Per-video Loader: visible whenever the active video is compiling or buffering */}
@@ -420,6 +556,57 @@ export default function ReelsFeed({ onClose }) {
                     top: 0 !important;
                     left: 0 !important;
                     object-fit: cover !important;
+                }
+
+                /* Custom Video Progress Bar Container (Moved up from bottom edge) */
+                :global(.reels-custom-progress-bar-container) {
+                    position: absolute;
+                    bottom: 120px;
+                    left: 0;
+                    width: 100%;
+                    height: 16px;
+                    z-index: 15;
+                    display: flex;
+                    align-items: center;
+                    cursor: pointer;
+                    padding: 0 8px;
+                    box-sizing: border-box;
+                }
+
+                :global(.reels-custom-progress-bar-track) {
+                    width: 100%;
+                    height: 4px;
+                    background: rgba(255, 255, 255, 0.25);
+                    position: relative;
+                    border-radius: 2px;
+                }
+
+                :global(.reels-custom-progress-bar-fill) {
+                    height: 100%;
+                    background-color: #7c3aed;
+                    width: 0%;
+                    border-radius: 2px;
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                }
+
+                /* Custom Big Movable Round Head (Thumb Scrubber) */
+                :global(.reels-custom-progress-bar-thumb) {
+                    position: absolute;
+                    top: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 12px;
+                    height: 12px;
+                    background-color: #7c3aed;
+                    border: 2px solid #fff;
+                    border-radius: 50%;
+                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+                    transition: transform 0.1s ease;
+                }
+
+                :global(.reels-custom-progress-bar-container:hover .reels-custom-progress-bar-thumb) {
+                    transform: translate(-50%, -50%) scale(1.25);
                 }
 
                 /* Inside-Card Loader Styles */
