@@ -917,7 +917,7 @@ export default function Home() {
         }
         .app.light .card-scripture {
           background: rgba(0,0,0,0.02);
-          border-left: 3px solid #7c22fe;
+          border-left: 3px solid #1a1919;
           color: #4a4a5e;
         }
         
@@ -940,7 +940,7 @@ export default function Home() {
           margin-top: 16px;
         }
         .app.light .prayer-section {
-          border-left: 3px solid #7c22fe;
+          border-left: 3px solid #1a1919;
           background: rgba(0,0,0,0.02);
         }
         .prayer-title {
@@ -951,7 +951,7 @@ export default function Home() {
           letter-spacing: 0.02em;
         }
         .app.light .prayer-title {
-          color: #7c22fe;
+          color: #1a1919;
         }
         .prayer-text {
           color: #f7f4ef;
