@@ -1896,9 +1896,16 @@ export default function Home() {
                 <div className="card-scripture">{selectedDevotion.scripture}</div>
                 
                 <div className="card-story">
-                  {selectedDevotion.story && selectedDevotion.story.split(/\n\n|\n/).filter(p => p.trim()).map((paragraph, idx) => (
-                    <p key={idx} className="story-paragraph">{paragraph}</p>
-                  ))}
+                  {selectedDevotion.story && (() => {
+                    let storyText = selectedDevotion.story;
+                    // If no double line breaks, convert single newlines to double
+                    if (!storyText.includes('\n\n') && storyText.includes('\n')) {
+                      storyText = storyText.replace(/\n/g, '\n\n');
+                    }
+                    return storyText.split(/\n\n/).filter(p => p.trim()).map((paragraph, idx) => (
+                      <p key={idx} className="story-paragraph">{paragraph}</p>
+                    ));
+                  })()}
                 </div>
                 
                 {selectedDevotion.prayer && (

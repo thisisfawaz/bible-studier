@@ -14,8 +14,9 @@ export async function POST(request) {
     }
 
     const data = {
-      ...reel,
       id: reel.id || `reel_${Date.now()}`,
+      video_id: reel.videoId,  // ← CHANGE: use video_id, not videoId
+      title: reel.title || `Reel ${new Date().toISOString()}`,
       status: scheduled ? 'scheduled' : 'published',
       schedule_date: scheduled ? scheduleDate : null,
       schedule_time: scheduled ? scheduleTime : null,
@@ -26,12 +27,19 @@ export async function POST(request) {
     // Remove undefined fields
     Object.keys(data).forEach(key => data[key] === undefined && delete data[key]);
 
+    console.log('📡 Saving reel:', data);
+
     const { data: result, error } = await supabase
       .from('reels')
       .upsert(data, { onConflict: 'id' })
       .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      throw error;
+    }
+
+    console.log('✅ Reel saved:', result);
 
     return NextResponse.json({
       success: true,

@@ -1,4 +1,4 @@
-// src/app/api/admin/publish/route.js
+// /app/api/admin/publish/route.js
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
@@ -7,6 +7,7 @@ export async function POST(request) {
     const { devotion } = await request.json();
 
     console.log('📡 Publishing:', devotion?.title);
+    console.log('📡 Devotion ID:', devotion?.id);
 
     if (!devotion || !devotion.id) {
       return NextResponse.json(
@@ -28,7 +29,10 @@ export async function POST(request) {
       .eq('id', devotion.id)
       .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      throw error;
+    }
 
     console.log('✅ Published successfully:', devotion.title);
 
@@ -38,9 +42,13 @@ export async function POST(request) {
     });
 
   } catch (error) {
-    console.error('Error publishing devotion:', error);
+    console.error('❌ Error publishing devotion:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { 
+        success: false, 
+        error: error.message,
+        details: error.stack 
+      },
       { status: 500 }
     );
   }
