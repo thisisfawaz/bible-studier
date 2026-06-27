@@ -4,10 +4,15 @@ import { supabase } from '@/lib/supabase';
 
 export async function POST(request) {
   try {
-    const { devotion, scheduled, scheduleDate, scheduleTime } = await request.json();
+    const body = await request.json();
+    console.log('📡 Full request body:', body);
+
+    const { devotion, scheduled, scheduleDate, scheduleTime } = body;
 
     console.log('📡 Saving devotion:', devotion?.title);
-    console.log('📡 Data received:', { scheduled, scheduleDate, scheduleTime });
+    console.log('📡 Scheduled:', scheduled);
+    console.log('📡 Schedule Date:', scheduleDate);
+    console.log('📡 Schedule Time:', scheduleTime);
 
     if (!devotion || !devotion.title) {
       return NextResponse.json(
@@ -28,9 +33,13 @@ export async function POST(request) {
     };
 
     // Remove undefined fields
-    Object.keys(data).forEach(key => data[key] === undefined && delete data[key]);
+    Object.keys(data).forEach(key => {
+      if (data[key] === undefined) {
+        delete data[key];
+      }
+    });
 
-    console.log('📡 Saving to Supabase:', data);
+    console.log('📡 Data being saved:', data);
 
     const { data: result, error } = await supabase
       .from('devotions')
@@ -38,11 +47,11 @@ export async function POST(request) {
       .select();
 
     if (error) {
-      console.error('❌ Supabase error:', error);
+      console.error('❌ Supabase error details:', error);
       throw error;
     }
 
-    console.log('✅ Saved successfully:', result?.[0]?.title);
+    console.log('✅ Save successful:', result?.[0]?.title);
 
     return NextResponse.json({
       success: true,
@@ -51,8 +60,13 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('❌ Error saving devotion:', error);
+    // Return the full error for debugging
     return NextResponse.json(
-      { success: false, error: error.message },
+      { 
+        success: false, 
+        error: error.message,
+        details: error.stack 
+      },
       { status: 500 }
     );
   }
