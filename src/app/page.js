@@ -2337,15 +2337,12 @@ if (!isMounted) {
                   <span className="card-category">
                     {studyData?.scripture?.translation || 'BSB'}
                   </span>
+                  <span className="card-date">
+                    {studyData?.scripture?.book} {studyData?.scripture?.chapter}
+                    {studyVerse && <span className="text-purple-400 text-sm ml-2">(Verse {studyVerse})</span>}
+                  </span>
                 </div>
-                <span className="card-date">
-                  {studyData?.scripture?.book} {studyData?.scripture?.chapter}
-                  {studyVerse && <span className="text-purple-400 text-sm ml-2">(Verse {studyVerse})</span>}
-                </span>
               </div>
-              <h2 className="card-title" style={{ fontSize: '18px', marginBottom: '12px' }}>
-                {studyData?.scripture?.book} {studyData?.scripture?.chapter}
-              </h2>
               <div className="max-h-[500px] overflow-y-auto">
                 <ScripturePane
                   scriptureData={studyData?.scripture || null}

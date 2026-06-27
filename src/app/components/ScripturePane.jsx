@@ -81,18 +81,7 @@ export default function ScripturePane({ scriptureData, isLoading = false, highli
 
   return (
     <div className={`flex flex-col ${className}`}>
-      {/* Header */}
-      <div className="mb-4 pb-3 border-b border-gray-700/40">
-        <h2 className="text-xs font-medium uppercase tracking-wider text-gray-400">
-          {scriptureData.translation || 'BSB'}
-        </h2>
-        <h1 className="text-lg font-semibold text-white">
-          {scriptureData.book} {scriptureData.chapter}
-          {highlightVerse && <span className="text-purple-400 text-sm ml-2">(Verse {highlightVerse})</span>}
-        </h1>
-      </div>
-
-      {/* Verses */}
+      {/* Verses - No header */}
       <div className="flex-1 overflow-y-auto space-y-1.5">
         {scriptureData.verses.map((verse, index) => {
           const verseNumber = getVerseNumber(verse);
@@ -104,7 +93,7 @@ export default function ScripturePane({ scriptureData, isLoading = false, highli
           return (
             <div 
               key={index} 
-              className={`flex gap-2 leading-relaxed ${isHighlighted ? 'bg-yellow-400 text-black font-bold rounded-lg p-2 -mx-2 border-l-4 border-red-600' : ''}`}
+              className={`flex gap-2 leading-relaxed ${isHighlighted ? 'bg-purple-500/20 rounded-lg p-2 -mx-2 border-l-4 border-purple-500' : ''}`}
             >
               <sup className={`text-xs font-mono mt-0.5 min-w-[20px] text-right select-none ${isHighlighted ? 'text-purple-400 font-bold' : 'text-gray-500'}`}>
                 {verseNumber || index + 1}
