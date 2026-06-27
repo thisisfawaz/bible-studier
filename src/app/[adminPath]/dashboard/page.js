@@ -11,8 +11,7 @@ export default function AdminDashboard() {
   const params = useParams();
   const router = useRouter();
   const adminPath = params.adminPath;
-  const expectedPath = process.env.NEXT_PUBLIC_ADMIN_PATH || 'admin';
-
+ const expectedPath = 'kamiurban24';
   // Redirect if wrong path
   useEffect(() => {
     if (adminPath !== expectedPath) {
