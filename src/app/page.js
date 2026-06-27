@@ -2,6 +2,67 @@
 
 import { useState, useEffect, useRef } from 'react';
 import ReelsFeed from './components/ReelsFeed';
+import { fetchStudyPackage, getBookName } from '@/app/utils/bibleStudyApi';
+import ScripturePane from '@/app/components/ScripturePane';
+import CommentaryPane from '@/app/components/CommentaryPane';
+
+// Helper: Parse scripture reference from user input
+function parseScriptureReference(input) {
+  // Try formats: "Book Chapter:Verse", "Book Chapter Verse", "Book Chapter"
+  const patterns = [
+    // Book Chapter:Verse (e.g., "John 3:16")
+    /^(.*?)\s+(\d+):(\d+)$/,
+    // Book Chapter Verse (e.g., "John 3 16")
+    /^(.*?)\s+(\d+)\s+(\d+)$/,
+    // Book Chapter (e.g., "John 3")
+    /^(.*?)\s+(\d+)$/,
+    // Book only (e.g., "John")
+    /^(.*?)$/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = input.trim().match(pattern);
+    if (match) {
+      const bookName = match[1].trim();
+      const chapter = match[2] ? parseInt(match[2]) : null;
+      const verse = match[3] ? parseInt(match[3]) : null;
+      
+      // Find book ID from name
+      const bookIds = ['GEN','EXO','LEV','NUM','DEU','JOS','JDG','RUT','1SA','2SA','1KI','2KI','1CH','2CH','EZR','NEH','EST','JOB','PSA','PRO','ECC','SNG','ISA','JER','LAM','EZK','DAN','HOS','JOL','AMO','OBA','JON','MIC','NAM','HAB','ZEP','HAG','ZEC','MAL','MAT','MRK','LUK','JHN','ACT','ROM','1CO','2CO','GAL','EPH','PHP','COL','1TH','2TH','1TI','2TI','TIT','PHM','HEB','JAS','1PE','2PE','1JN','2JN','3JN','JUD','REV'];
+      
+      let foundBookId = null;
+      for (const id of bookIds) {
+        const name = getBookName(id);
+        if (name.toLowerCase() === bookName.toLowerCase() ||
+            id.toLowerCase() === bookName.toLowerCase()) {
+          foundBookId = id;
+          break;
+        }
+      }
+      
+      // Try partial match if exact match not found
+      if (!foundBookId) {
+        for (const id of bookIds) {
+          const name = getBookName(id);
+          if (name.toLowerCase().includes(bookName.toLowerCase()) ||
+              bookName.toLowerCase().includes(name.toLowerCase())) {
+            foundBookId = id;
+            break;
+          }
+        }
+      }
+      
+      if (foundBookId) {
+        return {
+          bookId: foundBookId,
+          chapter: chapter || 1,
+          verse: verse || null  // ← Now capturing the verse
+        };
+      }
+    }
+  }
+  return null;
+}
 
 // ============================================================
 // RENDER FUNCTIONS
@@ -148,6 +209,18 @@ export default function Home() {
   const [selectedDevotionId, setSelectedDevotionId] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
+   // ===== NEW: Study Bible State =====
+  const [studyData, setStudyData] = useState(null);
+  const [studyLoading, setStudyLoading] = useState(false);
+  const [studyBook, setStudyBook] = useState('JHN');
+  const [studyChapter, setStudyChapter] = useState(3);
+  const [recentScriptures, setRecentScriptures] = useState([]);
+  const [studyBookInput, setStudyBookInput] = useState('John');
+  const [showBookSuggestions, setShowBookSuggestions] = useState(false);
+  const [bookSuggestions, setBookSuggestions] = useState([]);
+  const [studySearchInput, setStudySearchInput] = useState('');
+  const [studyVerse, setStudyVerse] = useState(null);
+
   const currentSession = chatSessions.find(s => s.id === currentSessionId);
   const messages = currentSession ? currentSession.messages : [];
 
@@ -254,6 +327,47 @@ export default function Home() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
+  // ===== TEST: Bible Study API =====
+  useEffect(() => {
+    async function testStudy() {
+      console.log('🧪 Testing Study Bible...');
+      const result = await fetchStudyPackage('JHN', 3);
+      console.log('📖 Study result:', result);
+    }
+    testStudy();
+  }, []);
+
+  // ===== NEW: Load Study Bible data =====
+  useEffect(() => {
+    async function loadStudy() {
+      setStudyLoading(true);
+      try {
+        const result = await fetchStudyPackage(studyBook, studyChapter);
+        setStudyData(result);
+        
+        // Get book name - getBookName() takes a book ID and returns the name
+        const bookName = getBookName(studyBook);
+        
+        // Add to recent scriptures
+        const scriptureRef = `${bookName} ${studyChapter}`;
+        setRecentScriptures(prev => {
+          const filtered = prev.filter(item => item !== scriptureRef);
+          return [scriptureRef, ...filtered].slice(0, 20);
+        });
+        
+        // Set book input - just use bookName directly
+        if (bookName) {
+          setStudyBookInput(bookName);
+        }
+      } catch (error) {
+        console.error('Error loading study:', error);
+      } finally {
+        setStudyLoading(false);
+      }
+    }
+    loadStudy();
+  }, [studyBook, studyChapter]);
+
   const getSelectedDevotion = () => {
     if (selectedDevotionId === 'daily' && dailyDevotion) {
       return dailyDevotion;
@@ -269,6 +383,36 @@ export default function Home() {
   };
 
   const selectedDevotion = getSelectedDevotion();
+
+// ===== LOAD STUDY DATA FUNCTION =====
+  const loadStudyData = async (bookId, chapter) => {
+    setStudyLoading(true);
+    try {
+      const result = await fetchStudyPackage(bookId, chapter);
+      setStudyData(result);
+      
+      const bookName = getBookName(bookId);
+      const scriptureRef = `${bookName} ${chapter}`;
+      setRecentScriptures(prev => {
+        const filtered = prev.filter(item => item !== scriptureRef);
+        return [scriptureRef, ...filtered].slice(0, 20);
+      });
+      
+      if (bookName) {
+        setStudyBookInput(bookName);
+        setStudySearchInput(`${bookName} ${chapter}`);
+      }
+    } catch (error) {
+      console.error('Error loading study:', error);
+    } finally {
+      setStudyLoading(false);
+    }
+  };
+  // ===== END LOAD STUDY DATA =====
+
+if (!isMounted) {
+  return <div style={{ backgroundColor: '#101012', minHeight: '100vh' }} />;
+}
 
   if (!isMounted) {
     return <div style={{ backgroundColor: '#101012', minHeight: '100vh' }} />;
@@ -1352,6 +1496,68 @@ export default function Home() {
           opacity: 1 !important;
         }
 
+        /* Study Bible Navigation */
+        .study-nav-row {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .study-nav-row .go-to-group {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex: 0 1 auto;
+          min-width: 120px;
+        }
+
+        .study-nav-row input {
+          padding: 6px 10px;
+          background: #1a1a1f;
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 8px;
+          color: #f7f4ef;
+          font-size: 13px;
+          outline: none;
+        }
+
+        .study-nav-row input:focus {
+          border-color: #7c3aed;
+        }
+
+        .study-nav-row .go-to-input {
+          flex: 1;
+          min-width: 80px;
+          max-width: 120px;
+        }
+        .study-nav-btn {
+          padding: 6px 14px;
+          border-radius: 8px;
+          border: none;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-family: var(--font);
+        }
+
+        .study-nav-btn.nav {
+          background: #2a2a2e;
+          color: #f7f4ef;
+          margin-right:8px;
+        }
+
+        .study-nav-btn.nav:hover {
+          background: #3a3a3e;
+        }
+
+        .study-nav-row-2 {
+          display: flex;
+          gap: 8px;
+          margin-top: 8px;
+        }
+
         @media (max-width: 768px) {
           .app {
             height: 100dvh !important;
@@ -1752,6 +1958,8 @@ export default function Home() {
         <div className="sidebar-header">
           {activeTab === 'chat' ? (
             <button className="new-chat-btn" onClick={startNewChat}>+ New Chat</button>
+          ) : activeTab === 'study' ? (
+            <div className="sidebar-title">📖 Recent Scriptures</div>
           ) : (
             <div className="sidebar-title">📖 Devotionals</div>
           )}
@@ -1772,25 +1980,64 @@ export default function Home() {
                 </div>
               </div>
             ))
-          ) : (
-            <>
-              {recentDevotions.map((devotion, index) => {
-                const devotionId = devotion.id || devotion.timestamp || `dev_${index}`;
+          ) : activeTab === 'study' ? (
+            // Study Bible recent scriptures
+            recentScriptures.length === 0 ? (
+              <div className="text-sm text-gray-500 p-4 text-center">No recent scriptures.</div>
+            ) : (
+              recentScriptures.map((ref, index) => {
+                // Extract book name and chapter from ref like "John 3"
+                const parts = ref.split(' ');
+                const chapter = parseInt(parts.pop());
+                const bookName = parts.join(' ');
+                
                 return (
                   <div
-                    key={devotionId}
-                    className={`session-item ${selectedDevotionId === devotionId ? 'active' : ''}`}
-                    onClick={() => selectDevotion(devotionId)}
+                    key={index}
+                    className="session-item"
+                    onClick={() => {
+                      // Find book ID from name
+                      const bookIds = ['GEN','EXO','LEV','NUM','DEU','JOS','JDG','RUT','1SA','2SA','1KI','2KI','1CH','2CH','EZR','NEH','EST','JOB','PSA','PRO','ECC','SNG','ISA','JER','LAM','EZK','DAN','HOS','JOL','AMO','OBA','JON','MIC','NAM','HAB','ZEP','HAG','ZEC','MAL','MAT','MRK','LUK','JHN','ACT','ROM','1CO','2CO','GAL','EPH','PHP','COL','1TH','2TH','1TI','2TI','TIT','PHM','HEB','JAS','1PE','2PE','1JN','2JN','3JN','JUD','REV'];
+                      let found = null;
+                      for (const id of bookIds) {
+                        if (getBookName(id) === bookName) {
+                          found = { id, name: bookName };
+                          break;
+                        }
+                      }
+                      if (found) {
+                        setStudyBook(found.id);
+                        setStudyChapter(chapter);
+                        setStudyBookInput(bookName);
+                      }
+                    }}
                   >
-                    <span className="icon">✨</span>
+                    <span className="icon">📖</span>
                     <div className="session-info">
-                      <div className="session-title">{devotion.title || 'Generated Devotion'}</div>
-                      <div className="session-date">{devotion.category || ''} • {devotion.date || ''}</div>
+                      <div className="session-title">{ref}</div>
                     </div>
                   </div>
                 );
-              })}
-            </>
+              })
+            )
+          ) : (
+            // Devotionals
+            recentDevotions.map((devotion, index) => {
+              const devotionId = devotion.id || devotion.timestamp || `dev_${index}`;
+              return (
+                <div
+                  key={devotionId}
+                  className={`session-item ${selectedDevotionId === devotionId ? 'active' : ''}`}
+                  onClick={() => selectDevotion(devotionId)}
+                >
+                  <span className="icon">✨</span>
+                  <div className="session-info">
+                    <div className="session-title">{devotion.title || 'Generated Devotion'}</div>
+                    <div className="session-date">{devotion.category || ''} • {devotion.date || ''}</div>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
 
@@ -1854,6 +2101,10 @@ export default function Home() {
               </span>
               <span className="icon-label">Paul (Bible Assistant)</span>
             </button>
+            
+            <button onClick={() => setActiveTab('study')} className={`tab-btn ${activeTab === 'study' ? 'active' : ''}`}>
+                <span className="icon-label">Study Bible</span>
+              </button>
 
             <button
               onClick={() => {
@@ -1946,7 +2197,7 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <div className="loading">No devotion selected.</div>
+              <div className="loading">Loading devotional...</div>
             )}
           </div>
         )}
@@ -2009,6 +2260,127 @@ export default function Home() {
             </form>
           </div>
         )}
+        
+        {activeTab === 'study' && (
+        <div className="devotions-scroll">
+          {/* Navigation Card */}
+          <div className="devotion-card" style={{ marginBottom: '16px' }}>
+            <div className="card-header">
+              <span className="card-category">📖 Study Bible</span>
+              <span className="card-date">Navigate Scripture</span>
+            </div>
+            
+            {/* Row 1: Go to, Prev, Next - all on one row */}
+            <div className="study-nav-row">
+              <div className="go-to-group">
+                <label className="text-sm text-gray-400">Go to:</label>
+                <input
+                  type="text"
+                  placeholder="John 3:16"
+                  value={studySearchInput}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setStudySearchInput(value);
+                    const parsed = parseScriptureReference(value);
+                    if (parsed) {
+                      setStudyBook(parsed.bookId);
+                      setStudyChapter(parsed.chapter);
+                      setStudyVerse(parsed.verse);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const parsed = parseScriptureReference(studySearchInput);
+                      if (parsed) {
+                        setStudyBook(parsed.bookId);
+                        setStudyChapter(parsed.chapter);
+                        setStudyVerse(parsed.verse);
+                        loadStudyData(parsed.bookId, parsed.chapter);
+                      }
+                    }
+                  }}
+                  className="go-to-input"
+                />
+              </div>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const newChapter = Math.max(1, studyChapter - 1);
+                    setStudyChapter(newChapter);
+                    loadStudyData(studyBook, newChapter);
+                  }}
+                  className="study-nav-btn nav"
+                >
+                  ← Prev
+                </button>
+                <button
+                  onClick={() => {
+                    const newChapter = studyChapter + 1;
+                    setStudyChapter(newChapter);
+                    loadStudyData(studyBook, newChapter);
+                  }}
+                  className="study-nav-btn nav"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Study Panels */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-8">
+            {/* Scripture Panel */}
+            <div className="devotion-card">
+              <div className="card-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span className="card-category">
+                    {studyData?.scripture?.translation || 'BSB'}
+                  </span>
+                </div>
+                <span className="card-date">
+                  {studyData?.scripture?.book} {studyData?.scripture?.chapter}
+                  {studyVerse && <span className="text-purple-400 text-sm ml-2">(Verse {studyVerse})</span>}
+                </span>
+              </div>
+              <h2 className="card-title" style={{ fontSize: '18px', marginBottom: '12px' }}>
+                {studyData?.scripture?.book} {studyData?.scripture?.chapter}
+              </h2>
+              <div className="max-h-[500px] overflow-y-auto">
+                <ScripturePane
+                  scriptureData={studyData?.scripture || null}
+                  isLoading={studyLoading}
+                  highlightVerse={studyVerse}
+                  className="h-full"
+                />
+              </div>
+            </div>
+
+            {/* Commentary Panel */}
+            <div className="devotion-card">
+              <div className="card-header">
+                <span className="card-category">
+                  {studyData?.commentary?.commentary || 'Commentary'}
+                </span>
+                <span className="card-date">
+                  {studyData?.commentary?.book} {studyData?.commentary?.chapter}
+                </span>
+              </div>
+              <h2 className="card-title" style={{ fontSize: '18px', marginBottom: '12px' }}>
+                Commentary
+              </h2>
+              <div className="max-h-[500px] overflow-y-auto">
+                <CommentaryPane
+                  commentaryData={studyData?.commentary || null}
+                  isLoading={studyLoading}
+                  className="h-full"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       </main>
 
       {showReels && (
