@@ -2099,7 +2099,7 @@ if (!isMounted) {
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                 </svg>
               </span>
-              <span className="icon-label">Paul (Bible Assistant)</span>
+              <span className="icon-label">Bible Teacher</span>
             </button>
             
             <button onClick={() => setActiveTab('study')} className={`tab-btn ${activeTab === 'study' ? 'active' : ''}`}>
@@ -2210,7 +2210,7 @@ if (!isMounted) {
                   <div className="welcome-icon">📖</div>
                   <h1 className="welcome-title">Ask Paul anything</h1>
                   <p className="welcome-subtitle">
-                    Your Bible Study assistant. Ask about scripture, theology, or faith — and get clear, thoughtful answers from <span>Paul</span>.
+                    Your Bible Study teacher. Ask about scripture, theology, or faith — and get clear, thoughtful answers from <span>Paul</span>.
                   </p>
                 </div>
               ) : (
