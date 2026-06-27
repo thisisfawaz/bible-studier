@@ -2267,7 +2267,7 @@ if (!isMounted) {
           <div className="devotion-card" style={{ marginBottom: '16px' }}>
             <div className="card-header">
               <span className="card-category">📖 Study Bible</span>
-              <span className="card-date">Navigate Scripture</span>
+              <span className="card-date"></span>
             </div>
             
             {/* Row 1: Go to, Prev, Next - all on one row */}
