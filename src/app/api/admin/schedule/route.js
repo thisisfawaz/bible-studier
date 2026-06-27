@@ -6,6 +6,9 @@ export async function POST(request) {
   try {
     const { devotion, scheduled, scheduleDate, scheduleTime } = await request.json();
 
+    console.log('📡 Saving devotion:', devotion?.title);
+    console.log('📡 Data received:', { scheduled, scheduleDate, scheduleTime });
+
     if (!devotion || !devotion.title) {
       return NextResponse.json(
         { success: false, error: 'Invalid devotion data' },
@@ -24,14 +27,22 @@ export async function POST(request) {
       created_at: new Date().toISOString()
     };
 
+    // Remove undefined fields
     Object.keys(data).forEach(key => data[key] === undefined && delete data[key]);
+
+    console.log('📡 Saving to Supabase:', data);
 
     const { data: result, error } = await supabase
       .from('devotions')
       .upsert(data, { onConflict: 'id' })
       .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      throw error;
+    }
+
+    console.log('✅ Saved successfully:', result?.[0]?.title);
 
     return NextResponse.json({
       success: true,
@@ -39,7 +50,7 @@ export async function POST(request) {
     });
 
   } catch (error) {
-    console.error('Error saving devotion:', error);
+    console.error('❌ Error saving devotion:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }
