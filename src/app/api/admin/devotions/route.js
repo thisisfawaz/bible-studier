@@ -1,4 +1,4 @@
-// src/app/api/admin/devotions/route.js
+// /app/api/admin/devotions/route.js
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
@@ -13,12 +13,12 @@ export async function GET() {
 
     if (scheduledError) throw scheduledError;
 
-    // Get published devotions
+    // Get published devotions (sorted by published_at timestamp - newest first)
     const { data: published, error: publishedError } = await supabase
       .from('devotions')
       .select('*')
       .eq('status', 'published')
-      .order('published_date', { ascending: false, nullsFirst: false });
+      .order('published_at', { ascending: false });
 
     if (publishedError) throw publishedError;
 

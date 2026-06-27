@@ -4,25 +4,22 @@ import { supabase } from '@/lib/supabase';
 
 export async function GET() {
   try {
-    // Get today's date
-    const today = new Date().toISOString().split('T')[0];
-
-    // Get the most recent published devotion (today's if exists, otherwise latest)
+    // Get the most recent published devotion (by published_at timestamp)
     const { data: todayDevotion, error: todayError } = await supabase
       .from('devotions')
       .select('*')
       .eq('status', 'published')
-      .order('published_date', { ascending: false })
+      .order('published_at', { ascending: false })
       .limit(1);
 
     if (todayError) throw todayError;
 
-    // Get all recent published devotions (for sidebar)
+    // Get all recent published devotions (by published_at timestamp)
     const { data: recentDevotions, error: recentError } = await supabase
       .from('devotions')
       .select('*')
       .eq('status', 'published')
-      .order('published_date', { ascending: false })
+      .order('published_at', { ascending: false })
       .limit(10);
 
     if (recentError) throw recentError;
