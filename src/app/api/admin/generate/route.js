@@ -1,4 +1,6 @@
+// src/app/api/admin/generate/route.js
 import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
 
 const CATEGORIES = [
   'Healing', 'Miracle', 'Wealth', 'Trust', 'Faith',
@@ -115,10 +117,41 @@ Format the response as a JSON object with these fields:
       );
     }
 
+    // Save the generated devotion to Supabase as 'scheduled'
+    const newDevotion = {
+      id: `dev_${Date.now()}`,
+      title: devotion.title || 'New Devotion',
+      scripture: devotion.scripture || '',
+      story: devotion.story || '',
+      prayer: devotion.prayer || '',
+      category: devotion.category || category,
+      person: devotion.person || '',
+      status: 'scheduled',
+      created_at: new Date().toISOString()
+    };
+
+    const { data: savedDevotion, error: saveError } = await supabase
+      .from('devotions')
+      .insert(newDevotion)
+      .select();
+
+    if (saveError) {
+      console.error('Error saving devotion:', saveError);
+      // Still return the devotion even if save fails
+      return NextResponse.json({
+        success: true,
+        devotion: {
+          ...newDevotion,
+          date: dateStr
+        },
+        warning: 'Generated but not saved to database'
+      });
+    }
+
     return NextResponse.json({
       success: true,
       devotion: {
-        ...devotion,
+        ...(savedDevotion?.[0] || newDevotion),
         date: dateStr
       }
     });

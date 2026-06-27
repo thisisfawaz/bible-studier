@@ -1,34 +1,6 @@
+// src/app/api/admin/delete/route.js
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
-
-const DATA_FILE = path.join(process.cwd(), 'data', 'scheduled-devotions.json');
-
-function readData() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-      return data;
-    }
-  } catch (error) {
-    console.error('Error reading data:', error);
-  }
-  return { scheduled: [], published: [] };
-}
-
-function writeData(data) {
-  try {
-    const dir = path.dirname(DATA_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-    return true;
-  } catch (error) {
-    console.error('Error writing data:', error);
-    return false;
-  }
-}
+import { supabase } from '@/lib/supabase';
 
 export async function POST(request) {
   try {
@@ -43,20 +15,15 @@ export async function POST(request) {
       );
     }
 
-    const data = readData();
+    // Delete from the devotions table (both scheduled and published are in the same table)
+    const { error } = await supabase
+      .from('devotions')
+      .delete()
+      .eq('id', id);
 
-    if (type === 'scheduled') {
-      data.scheduled = data.scheduled.filter(d => d.id !== id);
-    } else if (type === 'published') {
-      data.published = data.published.filter(d => d.id !== id);
-    } else {
-      return NextResponse.json(
-        { success: false, error: 'Invalid type' },
-        { status: 400 }
-      );
-    }
+    if (error) throw error;
 
-    writeData(data);
+    console.log('✅ Deleted successfully:', id);
     return NextResponse.json({ success: true });
 
   } catch (error) {
