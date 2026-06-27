@@ -1,57 +1,67 @@
-<button
-  type="button"
-  onClick={async () => {
-    const inputs = document.querySelectorAll('.reel-input');
-    const newReels = [];
-    inputs.forEach((input, idx) => {
-      const videoId = input.value.trim();
-      if (videoId) {
-        const titleInput = input.parentElement.querySelector('.reel-title-input');
-        newReels.push({
-          videoId: videoId,
-          title: titleInput ? titleInput.value.trim() || `Reel ${idx + 1}` : `Reel ${idx + 1}`
-        });
+// src/app/api/admin/reels/schedule/route.js
+import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+
+export async function POST(request) {
+  try {
+    const body = await request.json();
+    console.log('📡 Full request body:', body);
+
+    const { reel, scheduled, scheduleDate, scheduleTime } = body;
+
+    if (!reel || !reel.videoId) {
+      console.log('❌ Missing videoId');
+      return NextResponse.json(
+        { success: false, error: 'Missing videoId' },
+        { status: 400 }
+      );
+    }
+
+    const data = {
+      id: reel.id || `reel_${Date.now()}`,
+      video_id: reel.videoId,
+      title: reel.title || `Reel ${new Date().toISOString()}`,
+      status: scheduled ? 'scheduled' : 'published',
+      schedule_date: scheduled ? scheduleDate : null,
+      schedule_time: scheduled ? scheduleTime : null,
+      published_date: scheduled ? null : new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString()
+    };
+
+    // Remove undefined fields
+    Object.keys(data).forEach(key => {
+      if (data[key] === undefined) {
+        delete data[key];
       }
     });
 
-    if (newReels.length === 0) {
-      alert('Please add at least one video URL');
-      return;
+    console.log('📡 Data being saved:', data);
+
+    const { data: result, error } = await supabase
+      .from('reels')
+      .upsert(data, { onConflict: 'id' })
+      .select();
+
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500 }
+      );
     }
 
-    let successCount = 0;
-    for (const reel of newReels) {
-      try {
-        const response = await fetch('/api/admin/reels/schedule', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            reel: { ...reel, videoId: reel.videoId },
-            scheduled: false
-          })
-        });
-        const data = await response.json();
-        console.log('📥 Save response:', data);  // ← ADD THIS
-        if (data.success) successCount++;
-      } catch (err) {
-        console.error('Error saving reel:', err);
-      }
-    }
+    console.log('✅ Reel saved successfully:', result);
 
-    alert(`✅ ${successCount} reels saved successfully!`);
-    loadReels();
-  }}
-  style={{
-    padding: '12px 32px',
-    background: '#7c3aed',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.2s'
-  }}
->
-  💾 Save All Reels
-</button>
+    return NextResponse.json({
+      success: true,
+      reel: result?.[0] || data
+    });
+
+  } catch (error) {
+    console.error('❌ Error saving reel:', error);
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
+}
