@@ -22,15 +22,18 @@ function VideoCard({ video, index, isActive, apiReady }) {
     const containerRef = useRef(null);
     const [isNearViewport, setIsNearViewport] = useState(false);
     const [videoStarted, setVideoStarted] = useState(false);
-    // New state to manage the loading spinner overlay for this specific video
     const [isVideoLoading, setIsVideoLoading] = useState(true);
+    
+    // Track if the video was intentionally paused by a click interaction
+    const isManuallyPausedRef = useRef(false);
 
     const isActiveRef = useRef(isActive);
     useEffect(() => {
         isActiveRef.current = isActive;
         if (!isActive) {
             setVideoStarted(false);
-            setIsVideoLoading(true); // Reset loading state when scrolling away
+            setIsVideoLoading(true);
+            isManuallyPausedRef.current = false;
             if (playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
                 try { playerRef.current.pauseVideo(); } catch (e) {}
             }
@@ -108,19 +111,18 @@ function VideoCard({ video, index, isActive, apiReady }) {
                             }
                         },
                         onStateChange: (event) => {
-                            // Video is fully playing (not buffering or just thumbnail showing)
                             if (event.data === window.YT.PlayerState.PLAYING) {
                                 setVideoStarted(true);
-                                setIsVideoLoading(false); // Hide spinner
+                                setIsVideoLoading(false); // Clear custom loader once streaming frames roll
+                                isManuallyPausedRef.current = false;
                                 forceDisableCaptions(event.target);
                             }
-                            // Show loader if the video enters buffering mode mid-play
+                            
+                            // Only show loader on initial buffer/load, never during click to resume transitions
                             if (event.data === window.YT.PlayerState.BUFFERING) {
-                                setIsVideoLoading(true);
-                            }
-                            if (event.data === window.YT.PlayerState.ENDED) {
-                                event.target.seekTo(0);
-                                event.target.playVideo();
+                                if (!isManuallyPausedRef.current) {
+                                    setIsVideoLoading(true);
+                                }
                             }
                         }
                     }
@@ -132,7 +134,8 @@ function VideoCard({ video, index, isActive, apiReady }) {
     useEffect(() => {
         if (playerRef.current && typeof playerRef.current.playVideo === 'function') {
             if (isActive) {
-                setIsVideoLoading(true); // Ensure loader shows up on layout snap change
+                setIsVideoLoading(true);
+                isManuallyPausedRef.current = false;
                 playerRef.current.seekTo(0);
                 if (typeof playerRef.current.unMute === 'function') {
                     playerRef.current.unMute();
@@ -159,8 +162,11 @@ function VideoCard({ video, index, isActive, apiReady }) {
         if (playerRef.current) {
             const state = playerRef.current.getPlayerState();
             if (state === window.YT.PlayerState.PLAYING) {
+                isManuallyPausedRef.current = true;
                 playerRef.current.pauseVideo();
             } else {
+                // Keep loader hidden so the purple loader overlay doesn't stack on top of YouTube's resume frame gaps
+                setIsVideoLoading(false); 
                 playerRef.current.playVideo();
             }
         }
@@ -186,7 +192,7 @@ function VideoCard({ video, index, isActive, apiReady }) {
                     />
                 )}
 
-                {/* Per-video Loader: visible whenever the active video is compiling or buffering */}
+                {/* Per-video Loader: Custom overlay tracks structural context transitions safely */}
                 {isActive && isVideoLoading && (
                     <div className="video-card-loader-overlay">
                         <div className="card-spinner"></div>
@@ -412,7 +418,6 @@ export default function ReelsFeed({ onClose }) {
                     object-fit: cover !important;
                 }
 
-                /* Inside-Card Loader Styles */
                 :global(.video-card-loader-overlay) {
                     position: absolute;
                     inset: 0;
