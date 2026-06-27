@@ -929,6 +929,9 @@ export default function Home() {
           margin-bottom: 0 !important;
         }
         
+        .app.light .card-story .story-paragraph {
+        color: #303030;
+        }
         .prayer-section {
           background: rgba(255,255,255,0.02);
           border-left: 3px solid #ffffff;
@@ -1420,7 +1423,7 @@ export default function Home() {
             align-items: center !important;
             justify-content: flex-start !important;
             gap: 6px !important;
-            margin-bottom: 12px !important;
+            margin-bottom: 16px !important;
             min-height: 36px !important;
             flex-wrap: nowrap !important;
             width: 100% !important;
@@ -1611,7 +1614,7 @@ export default function Home() {
           .main-header { 
             gap: 4px !important;
             min-height: 32px !important;
-            margin-bottom: 10px !important;
+            margin-bottom: 16px !important;
           }
 
           .sidebar-top-row {
