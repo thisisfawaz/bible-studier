@@ -223,6 +223,9 @@ export default function Home() {
   const [studyTranslation, setStudyTranslation] = useState('kjv');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
+  const isLoadingFromSidebarRef = useRef(false);
+  const isNavigatingRef = useRef(false);
+  const isTranslationChangeRef = useRef(false);
 
   const currentSession = chatSessions.find(s => s.id === currentSessionId);
   const messages = currentSession ? currentSession.messages : [];
@@ -341,7 +344,13 @@ export default function Home() {
   }, []);
 
   // ===== NEW: Load Study Bible data =====
-  useEffect(() => {
+    useEffect(() => {
+    // If loading from sidebar, navigating, or translation change, skip this useEffect
+    if (isLoadingFromSidebarRef.current || isNavigatingRef.current || isTranslationChangeRef.current) {
+      isTranslationChangeRef.current = false; // Reset the flag
+      return;
+    }
+    
     async function loadStudy() {
       setStudyLoading(true);
       try {
@@ -349,15 +358,8 @@ export default function Home() {
         setStudyData(result);
         
         const bookName = getBookName(studyBook);
-        const scriptureRef = `${bookName} ${studyChapter}`;
-        setRecentScriptures(prev => {
-          const filtered = prev.filter(item => item !== scriptureRef);
-          return [scriptureRef, ...filtered].slice(0, 20);
-        });
-        
         if (bookName) {
           setStudyBookInput(bookName);
-          setStudySearchInput(`${bookName} ${studyChapter}${studyVerse ? `:${studyVerse}` : ''}`);
         }
       } catch (error) {
         console.error('Error loading study:', error);
@@ -366,7 +368,7 @@ export default function Home() {
       }
     }
     loadStudy();
-  }, [studyBook, studyChapter, studyTranslation]);
+  }, [studyBook, studyChapter, studyTranslation, studyVerse]);
 
   const getSelectedDevotion = () => {
     if (selectedDevotionId === 'daily' && dailyDevotion) {
@@ -384,34 +386,47 @@ export default function Home() {
 
   const selectedDevotion = getSelectedDevotion();
 
-// ===== LOAD STUDY DATA FUNCTION =====
-  const loadStudyData = async (bookId, chapter, verse = null) => {
+  // ===== LOAD STUDY DATA FUNCTION =====
+  const loadStudyData = async (bookId, chapter, verse = null, skipRecent = false, skipLoading = false) => {
+  // Only show loading if skipLoading is false
+  if (!skipLoading) {
     setStudyLoading(true);
-    try {
-      const result = await fetchStudyPackage(bookId, chapter, studyTranslation);
-      setStudyData(result);
-      
-      const bookName = getBookName(bookId);
-      const scriptureRef = `${bookName} ${chapter}`;
+  }
+  
+  try {
+    const result = await fetchStudyPackage(bookId, chapter, studyTranslation);
+    setStudyData(result);
+    
+    const bookName = getBookName(bookId);
+    const scriptureRef = verse ? `${bookName} ${chapter}:${verse}` : `${bookName} ${chapter}`;
+    
+    // Only add to recent if skipRecent is false
+    if (!skipRecent) {
       setRecentScriptures(prev => {
         const filtered = prev.filter(item => item !== scriptureRef);
         return [scriptureRef, ...filtered].slice(0, 20);
       });
-      
-      if (bookName) {
-        setStudyBookInput(bookName);
-        setStudySearchInput(`${bookName} ${chapter}${verse ? `:${verse}` : ''}`);
-      }
-      
-      // Set the verse for highlighting (forced conversion to integer or null)
-      setStudyVerse(verse ? parseInt(verse, 10) : null);
-    } catch (error) {
-      console.error('Error loading study:', error);
-    } finally {
-      setStudyLoading(false);
     }
-  };
-  // ===== END LOAD STUDY DATA =====
+    
+    if (bookName) {
+      setStudyBookInput(bookName);
+      const displayRef = verse ? `${bookName} ${chapter}:${verse}` : `${bookName} ${chapter}`;
+      setStudySearchInput(displayRef);
+    }
+    
+    if (verse) {
+      setStudyVerse(verse);
+    } else {
+      setStudyVerse(null);
+    }
+  } catch (error) {
+    console.error('Error loading study:', error);
+  } finally {
+    setStudyLoading(false);
+    isLoadingFromSidebarRef.current = false;
+  }
+};
+// ===== END LOAD STUDY DATA =====
 
   if (!isMounted) {
     return <div style={{ backgroundColor: '#101012', minHeight: '100vh' }} />;
@@ -2033,8 +2048,19 @@ export default function Home() {
               <div className="text-sm text-gray-500 p-4 text-center">No recent scriptures.</div>
             ) : (
               recentScriptures.map((ref, index) => {
+                // Parse the reference (e.g., "John 3" or "John 3:16")
                 const parts = ref.split(' ');
-                const chapter = parseInt(parts.pop(), 10);
+                const lastPart = parts.pop();
+                let chapter = parseInt(lastPart);
+                let verse = null;
+                
+                // Check if there's a verse (e.g., "3:16")
+                if (lastPart.includes(':')) {
+                  const [ch, v] = lastPart.split(':');
+                  chapter = parseInt(ch);
+                  verse = parseInt(v);
+                }
+                
                 const bookName = parts.join(' ');
                 
                 return (
@@ -2042,6 +2068,7 @@ export default function Home() {
                     key={index}
                     className="session-item"
                     onClick={() => {
+                      // Find book ID from name
                       const bookIds = ['GEN','EXO','LEV','NUM','DEU','JOS','JDG','RUT','1SA','2SA','1KI','2KI','1CH','2CH','EZR','NEH','EST','JOB','PSA','PRO','ECC','SNG','ISA','JER','LAM','EZK','DAN','HOS','JOL','AMO','OBA','JON','MIC','NAM','HAB','ZEP','HAG','ZEC','MAL','MAT','MRK','LUK','JHN','ACT','ROM','1CO','2CO','GAL','EPH','PHP','COL','1TH','2TH','1TI','2TI','TIT','PHM','HEB','JAS','1PE','2PE','1JN','2JN','3JN','JUD','REV'];
                       let found = null;
                       for (const id of bookIds) {
@@ -2051,10 +2078,13 @@ export default function Home() {
                         }
                       }
                       if (found) {
+                        isLoadingFromSidebarRef.current = true;
+                        isNavigatingRef.current = true;
                         setStudyBook(found.id);
                         setStudyChapter(chapter);
                         setStudyBookInput(bookName);
-                        setStudyVerse(null); // Clear highlight on historical reference change
+                        loadStudyData(found.id, chapter, verse, false, true);
+                        setStudyVerse(verse ? verse : null);
                       }
                     }}
                   >
@@ -2322,15 +2352,23 @@ export default function Home() {
                     type="text"
                     placeholder="John 3:16"
                     value={studySearchInput}
+                    autoComplete="off"
                     onChange={(e) => {
                       const value = e.target.value;
                       setStudySearchInput(value);
-                      
-                      // Show suggestions based on input - ONLY when typing letters, not numbers
+
+                      // If input is empty, clear everything but DON'T load
+                      if (value.length === 0) {
+                        setShowSuggestions(false);
+                        setSuggestions([]);
+                        // DO NOT load anything
+                        return;
+                      }
+
+                      // Show suggestions when typing
                       const bookIds = ['GEN','EXO','LEV','NUM','DEU','JOS','JDG','RUT','1SA','2SA','1KI','2KI','1CH','2CH','EZR','NEH','EST','JOB','PSA','PRO','ECC','SNG','ISA','JER','LAM','EZK','DAN','HOS','JOL','AMO','OBA','JON','MIC','NAM','HAB','ZEP','HAG','ZEC','MAL','MAT','MRK','LUK','JHN','ACT','ROM','1CO','2CO','GAL','EPH','PHP','COL','1TH','2TH','1TI','2TI','TIT','PHM','HEB','JAS','1PE','2PE','1JN','2JN','3JN','JUD','REV'];
-                      
-                      // Only show suggestions when typing letters (not numbers or full references)
-                      if (value.length > 0 && !value.match(/\d/) && !value.includes(':')) {
+
+                      if (value.length > 0 && !value.includes(':')) {
                         const matches = bookIds.filter(id => {
                           const name = getBookName(id);
                           return name.toLowerCase().includes(value.toLowerCase()) ||
@@ -2341,26 +2379,20 @@ export default function Home() {
                       } else {
                         setShowSuggestions(false);
                       }
-                      
-                      // Only parse if the input looks like a full reference (contains a number)
-                      if (value.match(/\d/) || value.includes(':')) {
-                        const parsed = parseScriptureReference(value);
-                        if (parsed) {
-                          setStudyBook(parsed.bookId);
-                          setStudyChapter(parsed.chapter);
-                          setStudyVerse(parsed.verse ? parseInt(parsed.verse, 10) : null);
-                        }
-                      }
-                      // REMOVED: The else if that was autofilling Genesis
+
+                      // DO NOT parse or change anything here - just show suggestions
+                      // The display should stay static until Enter is pressed
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         const parsed = parseScriptureReference(studySearchInput);
                         if (parsed) {
+                          isNavigatingRef.current = true;
                           setStudyBook(parsed.bookId);
                           setStudyChapter(parsed.chapter);
-                          setStudyVerse(parsed.verse ? parseInt(parsed.verse, 10) : null);
-                          loadStudyData(parsed.bookId, parsed.chapter, parsed.verse);
+                          const verseNum = parsed.verse ? parseInt(parsed.verse, 10) : null;
+                          setStudyVerse(verseNum);
+                          loadStudyData(parsed.bookId, parsed.chapter, verseNum, false, true);
                           setShowSuggestions(false);
                         }
                       }
@@ -2390,13 +2422,13 @@ export default function Home() {
                           <div
                             key={bookId}
                             onClick={() => {
-                              setStudyBook(bookId);
+                              // ONLY update the input - do NOT load anything
                               setStudyBookInput(bookName);
                               setStudySearchInput(bookName);
                               setShowSuggestions(false);
-                              loadStudyData(bookId, 1);
-                              setStudyChapter(1);
-                              setStudyVerse(null);
+                              // DO NOT change studyBook or studyChapter
+                              // DO NOT load anything
+                              // The current scripture should stay displayed
                             }}
                             style={{
                               padding: '8px 12px',
@@ -2426,8 +2458,16 @@ export default function Home() {
                   value={studyTranslation}
                   onChange={(e) => {
                     const newTranslation = e.target.value;
+                    isTranslationChangeRef.current = true; // Set the flag
                     setStudyTranslation(newTranslation);
-                    loadStudyData(studyBook, studyChapter, studyVerse);
+                    // Load without showing loading spinner
+                    fetchStudyPackage(studyBook, studyChapter, newTranslation)
+                      .then(result => {
+                        setStudyData(result);
+                      })
+                      .catch(error => {
+                        console.error('Error loading study:', error);
+                      });
                   }}
                   className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
                 >
@@ -2440,9 +2480,10 @@ export default function Home() {
                   <button
                     onClick={() => {
                       const newChapter = Math.max(1, studyChapter - 1);
+                      isNavigatingRef.current = true;
                       setStudyChapter(newChapter);
                       setStudyVerse(null);
-                      loadStudyData(studyBook, newChapter, null);
+                      loadStudyData(studyBook, newChapter, null, true, true);
                     }}
                     className="study-nav-btn nav"
                   >
@@ -2451,9 +2492,10 @@ export default function Home() {
                   <button
                     onClick={() => {
                       const newChapter = studyChapter + 1;
+                      isNavigatingRef.current = true;
                       setStudyChapter(newChapter);
                       setStudyVerse(null);
-                      loadStudyData(studyBook, newChapter, null);
+                      loadStudyData(studyBook, newChapter, null, true, true);
                     }}
                     className="study-nav-btn nav"
                   >
