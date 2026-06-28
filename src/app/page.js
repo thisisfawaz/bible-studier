@@ -2346,8 +2346,9 @@ export default function Home() {
               </div>
               
               <div className="study-nav-row">
-                <div className="go-to-group" style={{ position: 'relative' }}>
-                  <label className="text-sm text-gray-400">Go to:</label>
+                <div className="go-to-group" style={{ position: 'relative', display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <label className="text-sm text-gray-400">Go to:</label>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flex: 1, minWidth: '120px' }}>
                   <input
                     type="text"
                     placeholder="John 3:16"
@@ -2398,60 +2399,95 @@ export default function Home() {
                       }
                     }}
                     className="go-to-input"
+                    inputMode="search"
+                    enterKeyHint="go"
                   />
-                  
-                  {/* Suggestions Dropdown */}
-                  {showSuggestions && suggestions.length > 0 && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      backgroundColor: '#1a1a1f',
-                      border: '1px solid rgba(255,255,255,0.06)',
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const parsed = parseScriptureReference(studySearchInput);
+                      if (parsed) {
+                        isNavigatingRef.current = true;
+                        setStudyBook(parsed.bookId);
+                        setStudyChapter(parsed.chapter);
+                        const verseNum = parsed.verse ? parseInt(parsed.verse, 10) : null;
+                        setStudyVerse(verseNum);
+                        loadStudyData(parsed.bookId, parsed.chapter, verseNum, false, true);
+                        setShowSuggestions(false);
+                      }
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      background: '#7c3aed',
+                      border: 'none',
                       borderRadius: '8px',
-                      marginTop: '4px',
-                      maxHeight: '200px',
-                      overflowY: 'auto',
-                      zIndex: 50,
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
-                    }}>
-                      {suggestions.map((bookId) => {
-                        const bookName = getBookName(bookId);
-                        return (
-                          <div
-                            key={bookId}
-                            onClick={() => {
-                              // ONLY update the input - do NOT load anything
-                              setStudyBookInput(bookName);
-                              setStudySearchInput(bookName);
-                              setShowSuggestions(false);
-                              // DO NOT change studyBook or studyChapter
-                              // DO NOT load anything
-                              // The current scripture should stay displayed
-                            }}
-                            style={{
-                              padding: '8px 12px',
-                              cursor: 'pointer',
-                              color: '#f7f4ef',
-                              fontSize: '13px',
-                              transition: 'background 0.15s',
-                              fontFamily: 'var(--font)'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = 'transparent';
-                            }}
-                          >
-                            {bookName} <span style={{ color: '#6a6a6a', fontSize: '11px' }}>({bookId})</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                      color: 'white',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      height: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexShrink: 0
+                    }}
+                  >
+                    Go
+                  </button>
                 </div>
+                
+                {/* Suggestions Dropdown */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: '#1a1a1f',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: '8px',
+                    marginTop: '4px',
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    zIndex: 50,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
+                  }}>
+                    {suggestions.map((bookId) => {
+                      const bookName = getBookName(bookId);
+                      return (
+                        <div
+                          key={bookId}
+                          onClick={() => {
+                            // ONLY update the input - do NOT load anything
+                            setStudyBookInput(bookName);
+                            setStudySearchInput(bookName);
+                            setShowSuggestions(false);
+                            // DO NOT change studyBook or studyChapter
+                            // DO NOT load anything
+                            // The current scripture should stay displayed
+                          }}
+                          style={{
+                            padding: '8px 12px',
+                            cursor: 'pointer',
+                            color: '#f7f4ef',
+                            fontSize: '13px',
+                            transition: 'background 0.15s',
+                            fontFamily: 'var(--font)'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
+                        >
+                          {bookName} <span style={{ color: '#6a6a6a', fontSize: '11px' }}>({bookId})</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
                 
                 {/* Translation Selector */}
                 <select
