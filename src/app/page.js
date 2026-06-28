@@ -221,6 +221,8 @@ export default function Home() {
   const [studySearchInput, setStudySearchInput] = useState('Genesis 1');
   const [studyVerse, setStudyVerse] = useState(null);
   const [studyTranslation, setStudyTranslation] = useState('kjv');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
 
   const currentSession = chatSessions.find(s => s.id === currentSessionId);
   const messages = currentSession ? currentSession.messages : [];
@@ -1508,6 +1510,7 @@ export default function Home() {
           gap: 4px;
           flex: 0 1 auto;
           min-width: 120px;
+          position: relative;
         }
 
         .study-nav-row input {
@@ -1539,7 +1542,7 @@ export default function Home() {
           font-size: 13px;
           outline: none;
           cursor: pointer;
-          max-width: 150px;
+          max-width: 160px;
         }
 
         .study-nav-row select:focus {
@@ -1963,9 +1966,18 @@ export default function Home() {
           box-shadow: 0 2px 8px rgba(124, 58, 237, 0.15) !important;
         }
 
-        .highlight-verse .verse-number {
-          color: #7c3aed !important;
-          font-weight: 700 !important;
+        /* Suggestions dropdown scrollbar */
+        .go-to-group .suggestions-dropdown::-webkit-scrollbar {
+          width: 4px;
+        }
+
+        .go-to-group .suggestions-dropdown::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .go-to-group .suggestions-dropdown::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.1);
+          border-radius: 9999px;
         }
       `}</style>
 
@@ -2304,7 +2316,7 @@ export default function Home() {
               </div>
               
               <div className="study-nav-row">
-                <div className="go-to-group">
+                <div className="go-to-group" style={{ position: 'relative' }}>
                   <label className="text-sm text-gray-400">Go to:</label>
                   <input
                     type="text"
@@ -2313,12 +2325,33 @@ export default function Home() {
                     onChange={(e) => {
                       const value = e.target.value;
                       setStudySearchInput(value);
-                      const parsed = parseScriptureReference(value);
-                      if (parsed) {
-                        setStudyBook(parsed.bookId);
-                        setStudyChapter(parsed.chapter);
-                        setStudyVerse(parsed.verse ? parseInt(parsed.verse, 10) : null);
+                      
+                      // Show suggestions based on input - ONLY when typing letters, not numbers
+                      const bookIds = ['GEN','EXO','LEV','NUM','DEU','JOS','JDG','RUT','1SA','2SA','1KI','2KI','1CH','2CH','EZR','NEH','EST','JOB','PSA','PRO','ECC','SNG','ISA','JER','LAM','EZK','DAN','HOS','JOL','AMO','OBA','JON','MIC','NAM','HAB','ZEP','HAG','ZEC','MAL','MAT','MRK','LUK','JHN','ACT','ROM','1CO','2CO','GAL','EPH','PHP','COL','1TH','2TH','1TI','2TI','TIT','PHM','HEB','JAS','1PE','2PE','1JN','2JN','3JN','JUD','REV'];
+                      
+                      // Only show suggestions when typing letters (not numbers or full references)
+                      if (value.length > 0 && !value.match(/\d/) && !value.includes(':')) {
+                        const matches = bookIds.filter(id => {
+                          const name = getBookName(id);
+                          return name.toLowerCase().includes(value.toLowerCase()) ||
+                                id.toLowerCase().includes(value.toLowerCase());
+                        });
+                        setSuggestions(matches.slice(0, 8));
+                        setShowSuggestions(matches.length > 0);
+                      } else {
+                        setShowSuggestions(false);
                       }
+                      
+                      // Only parse if the input looks like a full reference (contains a number)
+                      if (value.match(/\d/) || value.includes(':')) {
+                        const parsed = parseScriptureReference(value);
+                        if (parsed) {
+                          setStudyBook(parsed.bookId);
+                          setStudyChapter(parsed.chapter);
+                          setStudyVerse(parsed.verse ? parseInt(parsed.verse, 10) : null);
+                        }
+                      }
+                      // REMOVED: The else if that was autofilling Genesis
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
@@ -2328,11 +2361,64 @@ export default function Home() {
                           setStudyChapter(parsed.chapter);
                           setStudyVerse(parsed.verse ? parseInt(parsed.verse, 10) : null);
                           loadStudyData(parsed.bookId, parsed.chapter, parsed.verse);
+                          setShowSuggestions(false);
                         }
                       }
                     }}
                     className="go-to-input"
                   />
+                  
+                  {/* Suggestions Dropdown */}
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      backgroundColor: '#1a1a1f',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: '8px',
+                      marginTop: '4px',
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      zIndex: 50,
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
+                    }}>
+                      {suggestions.map((bookId) => {
+                        const bookName = getBookName(bookId);
+                        return (
+                          <div
+                            key={bookId}
+                            onClick={() => {
+                              setStudyBook(bookId);
+                              setStudyBookInput(bookName);
+                              setStudySearchInput(bookName);
+                              setShowSuggestions(false);
+                              loadStudyData(bookId, 1);
+                              setStudyChapter(1);
+                              setStudyVerse(null);
+                            }}
+                            style={{
+                              padding: '8px 12px',
+                              cursor: 'pointer',
+                              color: '#f7f4ef',
+                              fontSize: '13px',
+                              transition: 'background 0.15s',
+                              fontFamily: 'var(--font)'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                            }}
+                          >
+                            {bookName} <span style={{ color: '#6a6a6a', fontSize: '11px' }}>({bookId})</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 
                 {/* Translation Selector */}

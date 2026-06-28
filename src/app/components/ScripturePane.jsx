@@ -103,7 +103,7 @@ export default function ScripturePane({ scriptureData, isLoading = false, highli
                 padding: isHighlighted ? '6px 10px' : '0',
                 margin: isHighlighted ? '0 -8px' : '0',
                 borderRadius: isHighlighted ? '8px' : '0',
-                backgroundColor: isHighlighted ? 'rgb(225, 171, 10)' : 'transparent',
+                backgroundColor: isHighlighted ? '#7f22fe' : 'transparent',
                 transition: 'all 0.2s'
               }}
             >
