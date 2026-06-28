@@ -72,7 +72,7 @@ function renderInlineContent(text) {
 
   const parts = [];
   let remaining = text;
-  let boldRegex = /\*\*(.*?)\*\"/g;
+  let boldRegex = /\*\*(.*?)\*\*/g
   let match;
   let lastIndex = 0;
 
@@ -2042,6 +2042,7 @@ export default function Home() {
                   if (window.innerWidth < 768) {
                     setIsSidebarOpen(false);
                   }
+                  setActiveTab('chat');
                   switchChat(session.id);
                 }}
               >
@@ -2093,6 +2094,9 @@ export default function Home() {
                           setIsSidebarOpen(false);
                         }
 
+                        // Make sure we stay on the Study Bible tab
+                        setActiveTab('study');
+
                         isLoadingFromSidebarRef.current = true;
                         isNavigatingRef.current = true;
                         setStudyBook(found.id);
@@ -2123,6 +2127,7 @@ export default function Home() {
                     if (window.innerWidth < 768) {
                       setIsSidebarOpen(false);
                     }
+                    setActiveTab('devotions');
                     selectDevotion(devotionId);
                   }}
                 >
@@ -2187,18 +2192,23 @@ export default function Home() {
               onClick={() => {
                 setActiveTab('chat');
                 setShowReels(false);
+                // Remove devotion parameter from URL
+                const url = new URL(window.location);
+                url.searchParams.delete('devotion');
+                window.history.replaceState({}, '', url);
               }}
               className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
             >
-              <span className="icon tab-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-              </span>
               <span className="icon-label">Bible Teacher</span>
             </button>
-            
-            <button onClick={() => setActiveTab('study')} className={`tab-btn ${activeTab === 'study' ? 'active' : ''}`}>
+
+            <button onClick={() => {
+              setActiveTab('study');
+              // Remove devotion parameter from URL
+              const url = new URL(window.location);
+              url.searchParams.delete('devotion');
+              window.history.replaceState({}, '', url);
+            }} className={`tab-btn ${activeTab === 'study' ? 'active' : ''}`}>
               <span className="icon-label">Study Bible</span>
             </button>
 
