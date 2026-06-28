@@ -4,8 +4,7 @@
 // API CONFIG
 // ============================================================
 
-const BASE_URL = 'https://bible.helloao.org/api';
-const DEFAULT_TRANSLATION = 'BSB';
+const DEFAULT_TRANSLATION = 'kjv';  // King James Version (Open Access)
 const DEFAULT_COMMENTARY = 'tyndale';
 
 // ============================================================
@@ -37,11 +36,15 @@ async function fetchWithCache(url, revalidateTime = 86400) {
 // MAIN: Fetch Both Scripture and Commentary
 // ============================================================
 
-export async function fetchStudyPackage(bookId, chapterNum, translation = DEFAULT_TRANSLATION, commentary = DEFAULT_COMMENTARY) {
-  const normalizedBookId = bookId.toUpperCase().padStart(3, ' ');
+export async function fetchStudyPackage(bookId, chapterNum, translation = 'kjv', commentary = DEFAULT_COMMENTARY) {
+  const normalizedBookId = bookId.toUpperCase();
   
-  const scriptureUrl = `${BASE_URL}/${translation}/${normalizedBookId}/${chapterNum}.json`;
-  const commentaryUrl = `${BASE_URL}/c/${commentary}/${normalizedBookId}/${chapterNum}.json`;
+  // Use our local API route instead of calling API.Bible directly
+  const scriptureUrl = `/api/bible?translation=${translation}&book=${normalizedBookId}&chapter=${chapterNum}`;
+  const commentaryUrl = `https://bible.helloao.org/api/c/${commentary}/${normalizedBookId}/${chapterNum}.json`;
+
+  console.log('📡 Fetching scripture from:', scriptureUrl);
+  console.log('📡 Fetching commentary from:', commentaryUrl);
 
   try {
     const [scriptureData, commentaryData] = await Promise.all([
@@ -49,40 +52,88 @@ export async function fetchStudyPackage(bookId, chapterNum, translation = DEFAUL
       fetchWithCache(commentaryUrl),
     ]);
 
-    // Parse scripture data
+    console.log('📡 Scripture data received:', scriptureData ? 'Yes' : 'No');
+    console.log('📡 Commentary data received:', commentaryData ? 'Yes' : 'No');
+
+    // Parse API.Bible scripture data
     let scripture = null;
-    if (scriptureData) {
+    if (scriptureData && scriptureData.success && scriptureData.data) {
       try {
-        // The API has chapter.content as an array of verse objects
-        const verses = scriptureData.chapter?.content?.map((v) => ({
-          number: v.verse || v.number || 0,
-          text: v.text || v.content || '',
-          original: v.original || '',
-        })) || [];
+        const data = scriptureData.data;
+        
+        // API.Bible returns verses in different structures
+        let verses = [];
+        if (data.verses && Array.isArray(data.verses)) {
+          verses = data.verses.map((v) => ({
+            number: v.verse || v.number || 0,
+            text: v.text || v.content || '',
+            original: v.original || '',
+          }));
+        } else if (data.content) {
+          // Use DOMParser to parse HTML
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(data.content, 'text/html');
+          const verseSpans = doc.querySelectorAll('span[data-number]');
+          
+          verseSpans.forEach((span) => {
+            const verseNum = parseInt(span.getAttribute('data-number'));
+            let text = '';
+            let next = span.nextSibling;
+            while (next && !(next.nodeType === 1 && next.hasAttribute('data-number'))) {
+              if (next.nodeType === 3) {
+                text += next.textContent;
+              } else if (next.nodeType === 1) {
+                text += next.textContent || '';
+              }
+              next = next.nextSibling;
+            }
+            text = text.trim();
+            if (verseNum && text) {
+              verses.push({
+                number: verseNum,
+                text: text,
+                original: '',
+              });
+            }
+          });
+          
+          // Fallback regex if DOMParser fails
+          if (verses.length === 0) {
+            const regex = /data-number="(\d+)"[^>]*>.*?<\/span>([^<]*)/gs;
+            let match;
+            while ((match = regex.exec(data.content)) !== null) {
+              const verseNum = parseInt(match[1]);
+              const verseText = match[2].replace(/<[^>]*>/g, '').trim();
+              if (verseNum && verseText) {
+                verses.push({
+                  number: verseNum,
+                  text: verseText,
+                  original: '',
+                });
+              }
+            }
+          }
+        }
 
         scripture = {
-          translation: scriptureData.translation?.name || translation,
-          translationId: scriptureData.translation?.id || translation,
-          book: scriptureData.book?.name || '',
-          bookId: scriptureData.book?.id || normalizedBookId,
-          chapter: scriptureData.chapter?.number || chapterNum,
+          translation: data.bible?.name || translation,
+          translationId: data.bible?.id || translation,
+          book: data.book?.name || '',
+          bookId: data.book?.id || normalizedBookId,
+          chapter: data.chapter || chapterNum,
           verses: verses,
-          totalVerses: scriptureData.numberOfVerses || verses.length,
-          reference: {
-            translation: scriptureData.translation?.id || translation,
-            book: scriptureData.book?.id || normalizedBookId,
-            chapter: scriptureData.chapter?.number || chapterNum,
-          },
-          previousChapter: scriptureData.previousChapterReference || null,
-          nextChapter: scriptureData.nextChapterReference || null,
-          audioLinks: scriptureData.thisChapterAudioLinks || null,
+          reference: data.reference || `${data.book?.name} ${data.chapter}`,
+          raw: scriptureData,
         };
+        
+        console.log('📡 Parsed verses:', verses.length);
+        
       } catch (e) {
         console.warn('[BibleAPI] Error parsing scripture:', e);
       }
     }
 
-    // Parse commentary data
+    // Parse commentary data (same as before)
     let commentaryResult = null;
     if (commentaryData) {
       try {
@@ -99,6 +150,7 @@ export async function fetchStudyPackage(bookId, chapterNum, translation = DEFAUL
           bookId: commentaryData.book?.id || normalizedBookId,
           chapter: commentaryData.chapter?.number || chapterNum,
           notes: notes,
+          raw: commentaryData,
         };
       } catch (e) {
         console.warn('[BibleAPI] Error parsing commentary:', e);
@@ -150,6 +202,25 @@ export function getBookName(bookId) {
     '3JN': '3 John', 'JUD': 'Jude', 'REV': 'Revelation'
   };
   return names[bookId] || bookId;
+}
+
+// ============================================================
+// UTILITY: Available translations
+// ============================================================
+
+export function getAvailableTranslations() {
+  return [
+    { id: 'kjv', name: 'King James Version (Open Access)' },
+    { id: 'bsb', name: 'Berean Standard Bible' },
+    { id: 'nkjv', name: 'New King James Version' },
+    { id: 'web', name: 'World English Bible' },
+    { id: 'esv', name: 'English Standard Version' },
+    { id: 'niv', name: 'New International Version' },
+    { id: 'msg', name: 'The Message' },
+    { id: 'amp', name: 'Amplified Bible' },
+    { id: 'nasb', name: 'New American Standard Bible' },
+    { id: 'csb', name: 'Christian Standard Bible' },
+  ];
 }
 
 // ============================================================

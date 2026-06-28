@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import ReelsFeed from './components/ReelsFeed';
-import { fetchStudyPackage, getBookName } from '@/app/utils/bibleStudyApi';
+import { fetchStudyPackage, getBookName, getAvailableTranslations } from '@/app/utils/bibleStudyApi';
 import ScripturePane from '@/app/components/ScripturePane';
 import CommentaryPane from '@/app/components/CommentaryPane';
 
@@ -220,6 +220,7 @@ export default function Home() {
   const [bookSuggestions, setBookSuggestions] = useState([]);
   const [studySearchInput, setStudySearchInput] = useState('');
   const [studyVerse, setStudyVerse] = useState(null);
+  const [studyTranslation, setStudyTranslation] = useState('kjv');
 
   const currentSession = chatSessions.find(s => s.id === currentSessionId);
   const messages = currentSession ? currentSession.messages : [];
@@ -388,7 +389,7 @@ export default function Home() {
   const loadStudyData = async (bookId, chapter) => {
     setStudyLoading(true);
     try {
-      const result = await fetchStudyPackage(bookId, chapter);
+      const result = await fetchStudyPackage(bookId, chapter, studyTranslation);
       setStudyData(result);
       
       const bookName = getBookName(bookId);
@@ -2267,10 +2268,9 @@ if (!isMounted) {
           <div className="devotion-card" style={{ marginBottom: '16px' }}>
             <div className="card-header">
               <span className="card-category">📖 Study Bible</span>
-              <span className="card-date"></span>
+              <span className="card-date">Navigate Scripture</span>
             </div>
             
-            {/* Row 1: Go to, Prev, Next - all on one row */}
             <div className="study-nav-row">
               <div className="go-to-group">
                 <label className="text-sm text-gray-400">Go to:</label>
@@ -2302,6 +2302,17 @@ if (!isMounted) {
                   className="go-to-input"
                 />
               </div>
+              
+              {/* Translation Selector */}
+              <select
+                value={studyTranslation}
+                onChange={(e) => setStudyTranslation(e.target.value)}
+                className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
+              >
+                {getAvailableTranslations().map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
               
               <div className="flex gap-2">
                 <button
