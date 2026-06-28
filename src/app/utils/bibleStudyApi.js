@@ -137,11 +137,17 @@ export async function fetchStudyPackage(bookId, chapterNum, translation = 'kjv',
     let commentaryResult = null;
     if (commentaryData) {
       try {
-        const notes = commentaryData.notes?.map((n) => ({
-          title: n.title || n.heading || 'Note',
-          verses: n.verses || n.ref || '',
-          content: n.content || n.text || '',
-        })) || [];
+        // The notes are in chapter.content array
+        const contentItems = commentaryData.chapter?.content || [];
+        
+        // Filter only verse type items and format them as notes
+        const notes = contentItems
+          .filter(item => item.type === 'verse')
+          .map((item) => ({
+            title: `Verse ${item.number}`,
+            verses: `vv. ${item.number}`,
+            content: Array.isArray(item.content) ? item.content.join(' ') : item.content || '',
+          }));
 
         commentaryResult = {
           commentary: commentaryData.commentary?.name || commentary,
@@ -152,6 +158,8 @@ export async function fetchStudyPackage(bookId, chapterNum, translation = 'kjv',
           notes: notes,
           raw: commentaryData,
         };
+        
+        console.log('📡 Parsed commentary notes:', notes.length);
       } catch (e) {
         console.warn('[BibleAPI] Error parsing commentary:', e);
       }
