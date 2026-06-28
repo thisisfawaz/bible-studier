@@ -210,16 +210,16 @@ export function getBookName(bookId) {
 
 export function getAvailableTranslations() {
   return [
-    { id: 'kjv', name: 'King James Version (Open Access)' },
-    { id: 'bsb', name: 'Berean Standard Bible' },
-    { id: 'nkjv', name: 'New King James Version' },
-    { id: 'web', name: 'World English Bible' },
-    { id: 'esv', name: 'English Standard Version' },
+    { id: 'kjv', name: 'King James Version' },
     { id: 'niv', name: 'New International Version' },
     { id: 'msg', name: 'The Message' },
     { id: 'amp', name: 'Amplified Bible' },
-    { id: 'nasb', name: 'New American Standard Bible' },
-    { id: 'csb', name: 'Christian Standard Bible' },
+    //{ id: 'nlt', name: 'New Living Translation' },
+    //{ id: 'nkjv', name: 'New King James Version' },
+    { id: 'web', name: 'World English Bible' },
+    //{ id: 'nasb', name: 'New American Standard Bible' },
+    //{ id: 'csb', name: 'Christian Standard Bible' },
+    //{ id: 'bsb', name: 'Berean Standard Bible' },
   ];
 }
 

@@ -56,7 +56,7 @@ function parseScriptureReference(input) {
         return {
           bookId: foundBookId,
           chapter: chapter || 1,
-          verse: verse || null  // ← Now capturing the verse
+          verse: verse || null  // Now capturing the verse
         };
       }
     }
@@ -72,7 +72,7 @@ function renderInlineContent(text) {
 
   const parts = [];
   let remaining = text;
-  let boldRegex = /\*\*(.*?)\*\*/g;
+  let boldRegex = /\*\*(.*?)\*\"/g;
   let match;
   let lastIndex = 0;
 
@@ -209,16 +209,16 @@ export default function Home() {
   const [selectedDevotionId, setSelectedDevotionId] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-   // ===== NEW: Study Bible State =====
+   // ===== Study Bible State =====
   const [studyData, setStudyData] = useState(null);
   const [studyLoading, setStudyLoading] = useState(false);
-  const [studyBook, setStudyBook] = useState('JHN');
-  const [studyChapter, setStudyChapter] = useState(3);
+  const [studyBook, setStudyBook] = useState('GEN');
+  const [studyChapter, setStudyChapter] = useState(1);
   const [recentScriptures, setRecentScriptures] = useState([]);
-  const [studyBookInput, setStudyBookInput] = useState('John');
+  const [studyBookInput, setStudyBookInput] = useState('Genesis');
   const [showBookSuggestions, setShowBookSuggestions] = useState(false);
   const [bookSuggestions, setBookSuggestions] = useState([]);
-  const [studySearchInput, setStudySearchInput] = useState('');
+  const [studySearchInput, setStudySearchInput] = useState('Genesis 1');
   const [studyVerse, setStudyVerse] = useState(null);
   const [studyTranslation, setStudyTranslation] = useState('kjv');
 
@@ -343,22 +343,19 @@ export default function Home() {
     async function loadStudy() {
       setStudyLoading(true);
       try {
-        const result = await fetchStudyPackage(studyBook, studyChapter);
+        const result = await fetchStudyPackage(studyBook, studyChapter, studyTranslation);
         setStudyData(result);
         
-        // Get book name - getBookName() takes a book ID and returns the name
         const bookName = getBookName(studyBook);
-        
-        // Add to recent scriptures
         const scriptureRef = `${bookName} ${studyChapter}`;
         setRecentScriptures(prev => {
           const filtered = prev.filter(item => item !== scriptureRef);
           return [scriptureRef, ...filtered].slice(0, 20);
         });
         
-        // Set book input - just use bookName directly
         if (bookName) {
           setStudyBookInput(bookName);
+          setStudySearchInput(`${bookName} ${studyChapter}${studyVerse ? `:${studyVerse}` : ''}`);
         }
       } catch (error) {
         console.error('Error loading study:', error);
@@ -367,7 +364,7 @@ export default function Home() {
       }
     }
     loadStudy();
-  }, [studyBook, studyChapter]);
+  }, [studyBook, studyChapter, studyTranslation]);
 
   const getSelectedDevotion = () => {
     if (selectedDevotionId === 'daily' && dailyDevotion) {
@@ -386,7 +383,7 @@ export default function Home() {
   const selectedDevotion = getSelectedDevotion();
 
 // ===== LOAD STUDY DATA FUNCTION =====
-  const loadStudyData = async (bookId, chapter) => {
+  const loadStudyData = async (bookId, chapter, verse = null) => {
     setStudyLoading(true);
     try {
       const result = await fetchStudyPackage(bookId, chapter, studyTranslation);
@@ -401,8 +398,11 @@ export default function Home() {
       
       if (bookName) {
         setStudyBookInput(bookName);
-        setStudySearchInput(`${bookName} ${chapter}`);
+        setStudySearchInput(`${bookName} ${chapter}${verse ? `:${verse}` : ''}`);
       }
+      
+      // Set the verse for highlighting (forced conversion to integer or null)
+      setStudyVerse(verse ? parseInt(verse, 10) : null);
     } catch (error) {
       console.error('Error loading study:', error);
     } finally {
@@ -410,10 +410,6 @@ export default function Home() {
     }
   };
   // ===== END LOAD STUDY DATA =====
-
-if (!isMounted) {
-  return <div style={{ backgroundColor: '#101012', minHeight: '100vh' }} />;
-}
 
   if (!isMounted) {
     return <div style={{ backgroundColor: '#101012', minHeight: '100vh' }} />;
@@ -1477,6 +1473,7 @@ if (!isMounted) {
 
         .app.light .send-btn:hover:not(:disabled) {
           background: #3a3a3e !important;
+          box-shadow: none;
         }
 
         .app.light .welcome-screen .welcome-title {
@@ -1532,6 +1529,28 @@ if (!isMounted) {
           min-width: 80px;
           max-width: 120px;
         }
+
+        .study-nav-row select {
+          padding: 6px 10px;
+          background: #1a1a1f;
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 8px;
+          color: #f7f4ef;
+          font-size: 13px;
+          outline: none;
+          cursor: pointer;
+          max-width: 150px;
+        }
+
+        .study-nav-row select:focus {
+          border-color: #7c3aed;
+        }
+
+        .study-nav-row select option {
+          background: #1a1a1f;
+          color: #f7f4ef;
+        }
+
         .study-nav-btn {
           padding: 6px 14px;
           border-radius: 8px;
@@ -1546,7 +1565,7 @@ if (!isMounted) {
         .study-nav-btn.nav {
           background: #2a2a2e;
           color: #f7f4ef;
-          margin-right:8px;
+          margin-right: 8px;
         }
 
         .study-nav-btn.nav:hover {
@@ -1933,6 +1952,21 @@ if (!isMounted) {
           .welcome-screen .welcome-title { font-size: 20px !important; }
           .welcome-screen .welcome-subtitle { font-size: 14px !important; }
         }
+        
+        /* Bible text highlight */
+        .highlight-verse {
+          background: rgba(124, 58, 237, 0.2) !important;
+          border-left: 4px solid #7c3aed !important;
+          padding: 6px 10px !important;
+          border-radius: 8px !important;
+          margin: 0 -8px !important;
+          box-shadow: 0 2px 8px rgba(124, 58, 237, 0.15) !important;
+        }
+
+        .highlight-verse .verse-number {
+          color: #7c3aed !important;
+          font-weight: 700 !important;
+        }
       `}</style>
 
       <div className={`sidebar-overlay ${isSidebarOpen ? 'open' : ''}`} onClick={toggleSidebar}></div>
@@ -1987,9 +2021,8 @@ if (!isMounted) {
               <div className="text-sm text-gray-500 p-4 text-center">No recent scriptures.</div>
             ) : (
               recentScriptures.map((ref, index) => {
-                // Extract book name and chapter from ref like "John 3"
                 const parts = ref.split(' ');
-                const chapter = parseInt(parts.pop());
+                const chapter = parseInt(parts.pop(), 10);
                 const bookName = parts.join(' ');
                 
                 return (
@@ -1997,7 +2030,6 @@ if (!isMounted) {
                     key={index}
                     className="session-item"
                     onClick={() => {
-                      // Find book ID from name
                       const bookIds = ['GEN','EXO','LEV','NUM','DEU','JOS','JDG','RUT','1SA','2SA','1KI','2KI','1CH','2CH','EZR','NEH','EST','JOB','PSA','PRO','ECC','SNG','ISA','JER','LAM','EZK','DAN','HOS','JOL','AMO','OBA','JON','MIC','NAM','HAB','ZEP','HAG','ZEC','MAL','MAT','MRK','LUK','JHN','ACT','ROM','1CO','2CO','GAL','EPH','PHP','COL','1TH','2TH','1TI','2TI','TIT','PHM','HEB','JAS','1PE','2PE','1JN','2JN','3JN','JUD','REV'];
                       let found = null;
                       for (const id of bookIds) {
@@ -2010,6 +2042,7 @@ if (!isMounted) {
                         setStudyBook(found.id);
                         setStudyChapter(chapter);
                         setStudyBookInput(bookName);
+                        setStudyVerse(null); // Clear highlight on historical reference change
                       }
                     }}
                   >
@@ -2104,8 +2137,8 @@ if (!isMounted) {
             </button>
             
             <button onClick={() => setActiveTab('study')} className={`tab-btn ${activeTab === 'study' ? 'active' : ''}`}>
-                <span className="icon-label">Study Bible</span>
-              </button>
+              <span className="icon-label">Study Bible</span>
+            </button>
 
             <button
               onClick={() => {
@@ -2153,7 +2186,6 @@ if (!isMounted) {
                 <div className="card-story">
                   {selectedDevotion.story && (() => {
                     let storyText = selectedDevotion.story;
-                    // If no double line breaks, convert single newlines to double
                     if (!storyText.includes('\n\n') && storyText.includes('\n')) {
                       storyText = storyText.replace(/\n/g, '\n\n');
                     }
@@ -2263,132 +2295,137 @@ if (!isMounted) {
         )}
         
         {activeTab === 'study' && (
-        <div className="devotions-scroll">
-          {/* Navigation Card */}
-          <div className="devotion-card" style={{ marginBottom: '16px' }}>
-            <div className="card-header">
-              <span className="card-category">📖 Study Bible</span>
-              <span className="card-date">Navigate Scripture</span>
-            </div>
-            
-            <div className="study-nav-row">
-              <div className="go-to-group">
-                <label className="text-sm text-gray-400">Go to:</label>
-                <input
-                  type="text"
-                  placeholder="John 3:16"
-                  value={studySearchInput}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setStudySearchInput(value);
-                    const parsed = parseScriptureReference(value);
-                    if (parsed) {
-                      setStudyBook(parsed.bookId);
-                      setStudyChapter(parsed.chapter);
-                      setStudyVerse(parsed.verse);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const parsed = parseScriptureReference(studySearchInput);
+          <div className="devotions-scroll">
+            {/* Navigation Card */}
+            <div className="devotion-card" style={{ marginBottom: '16px' }}>
+              <div className="card-header">
+                <span className="card-category">📖 Study Bible</span>
+                <span className="card-date"></span>
+              </div>
+              
+              <div className="study-nav-row">
+                <div className="go-to-group">
+                  <label className="text-sm text-gray-400">Go to:</label>
+                  <input
+                    type="text"
+                    placeholder="John 3:16"
+                    value={studySearchInput}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setStudySearchInput(value);
+                      const parsed = parseScriptureReference(value);
                       if (parsed) {
                         setStudyBook(parsed.bookId);
                         setStudyChapter(parsed.chapter);
-                        setStudyVerse(parsed.verse);
-                        loadStudyData(parsed.bookId, parsed.chapter);
+                        setStudyVerse(parsed.verse ? parseInt(parsed.verse, 10) : null);
                       }
-                    }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const parsed = parseScriptureReference(studySearchInput);
+                        if (parsed) {
+                          setStudyBook(parsed.bookId);
+                          setStudyChapter(parsed.chapter);
+                          setStudyVerse(parsed.verse ? parseInt(parsed.verse, 10) : null);
+                          loadStudyData(parsed.bookId, parsed.chapter, parsed.verse);
+                        }
+                      }
+                    }}
+                    className="go-to-input"
+                  />
+                </div>
+                
+                {/* Translation Selector */}
+                <select
+                  value={studyTranslation}
+                  onChange={(e) => {
+                    const newTranslation = e.target.value;
+                    setStudyTranslation(newTranslation);
+                    loadStudyData(studyBook, studyChapter, studyVerse);
                   }}
-                  className="go-to-input"
-                />
-              </div>
-              
-              {/* Translation Selector */}
-              <select
-                value={studyTranslation}
-                onChange={(e) => setStudyTranslation(e.target.value)}
-                className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
-              >
-                {getAvailableTranslations().map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-              
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    const newChapter = Math.max(1, studyChapter - 1);
-                    setStudyChapter(newChapter);
-                    loadStudyData(studyBook, newChapter);
-                  }}
-                  className="study-nav-btn nav"
+                  className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
                 >
-                  ← Prev
-                </button>
-                <button
-                  onClick={() => {
-                    const newChapter = studyChapter + 1;
-                    setStudyChapter(newChapter);
-                    loadStudyData(studyBook, newChapter);
-                  }}
-                  className="study-nav-btn nav"
-                >
-                  Next →
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Study Panels */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-8">
-            {/* Scripture Panel */}
-            <div className="devotion-card">
-              <div className="card-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                  <span className="card-category">
-                    {studyData?.scripture?.translation || 'BSB'}
-                  </span>
-                  <span className="card-date">
-                    {studyData?.scripture?.book} {studyData?.scripture?.chapter}
-                    {studyVerse && <span className="text-purple-400 text-sm ml-2">(Verse {studyVerse})</span>}
-                  </span>
+                  {getAvailableTranslations().map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+                
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const newChapter = Math.max(1, studyChapter - 1);
+                      setStudyChapter(newChapter);
+                      setStudyVerse(null);
+                      loadStudyData(studyBook, newChapter, null);
+                    }}
+                    className="study-nav-btn nav"
+                  >
+                    ← Prev
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newChapter = studyChapter + 1;
+                      setStudyChapter(newChapter);
+                      setStudyVerse(null);
+                      loadStudyData(studyBook, newChapter, null);
+                    }}
+                    className="study-nav-btn nav"
+                  >
+                    Next →
+                  </button>
                 </div>
               </div>
-              <div className="max-h-[500px] overflow-y-auto">
-                <ScripturePane
-                  scriptureData={studyData?.scripture || null}
-                  isLoading={studyLoading}
-                  highlightVerse={studyVerse}
-                  className="h-full"
-                />
-              </div>
             </div>
 
-            {/* Commentary Panel */}
-            <div className="devotion-card">
-              <div className="card-header">
-                <span className="card-category">
-                  {studyData?.commentary?.commentary || 'Commentary'}
-                </span>
-                <span className="card-date">
-                  {studyData?.commentary?.book} {studyData?.commentary?.chapter}
-                </span>
+            {/* Study Panels */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-8">
+              {/* Scripture Panel */}
+              <div className="devotion-card">
+                <div className="card-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span className="card-category">
+                      {studyData?.scripture?.translation || 'BSB'}
+                    </span>
+                    <span className="card-date">
+                      {studyData?.scripture?.book} {studyData?.scripture?.chapter}
+                      {studyVerse && <span className="text-purple-400 text-sm ml-2">(Verse {studyVerse})</span>}
+                    </span>
+                  </div>
+                </div>
+                <div className="max-h-[500px] overflow-y-auto">
+                  <ScripturePane
+                    scriptureData={studyData?.scripture || null}
+                    isLoading={studyLoading}
+                    highlightVerse={studyVerse}
+                    className="h-full"
+                  />
+                </div>
               </div>
-              <h2 className="card-title" style={{ fontSize: '18px', marginBottom: '12px' }}>
-                Commentary
-              </h2>
-              <div className="max-h-[500px] overflow-y-auto">
-                <CommentaryPane
-                  commentaryData={studyData?.commentary || null}
-                  isLoading={studyLoading}
-                  className="h-full"
-                />
+
+              {/* Commentary Panel */}
+              <div className="devotion-card">
+                <div className="card-header">
+                  <span className="card-category">
+                    {studyData?.commentary?.commentary || 'Commentary'}
+                  </span>
+                  <span className="card-date">
+                    {studyData?.commentary?.book} {studyData?.commentary?.chapter}
+                  </span>
+                </div>
+                <h2 className="card-title" style={{ fontSize: '18px', marginBottom: '12px' }}>
+                  Commentary
+                </h2>
+                <div className="max-h-[500px] overflow-y-auto">
+                  <CommentaryPane
+                    commentaryData={studyData?.commentary || null}
+                    isLoading={studyLoading}
+                    className="h-full"
+                  />
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-
+        )}
       </main>
 
       {showReels && (

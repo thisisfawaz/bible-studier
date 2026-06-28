@@ -2,10 +2,16 @@ import { NextResponse } from 'next/server';
 
 // Map human-friendly tokens to API.Bible's mandatory hexadecimal ID format
 const BIBLE_ID_MAP = {
-  kjv: 'de4e12af7f28f599-01',  // King James Version - Open Access ✅
+  kjv: 'de4e12af7f28f599-01',  // King James Version
   nkjv: '63097d2a0a2f7db3-01', // New King James Version
   web: '9879dbb7cfe39e4d-01',  // World English Bible
   msg: '6f11a7de016f942e-01', // The Message
+  amp: 'a81b73293d3080c9-01', // Amplified Bible
+  niv: '78a9f6124f344018-01', // New International Version 2011 (NIV11)
+  nlt: 'd6e14a625393b4da-01', // New Living Translation
+  csb: 'a556c5305ee15c3f-01', // Christian Standard Bible
+  nasb: 'a761ca71e0b3ddcf-01', // New American Standard Bible
+  bsb: 'bba9f40183526463-01', // Berean Standard Bible
 };
 
 export async function GET(request) {

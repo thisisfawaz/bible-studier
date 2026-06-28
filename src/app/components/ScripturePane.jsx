@@ -60,20 +60,20 @@ export default function ScripturePane({ scriptureData, isLoading = false, highli
 
   // Helper to get verse number
   const getVerseNumber = (verse) => {
-    if (verse.number && verse.number > 0) return verse.number;
-    if (verse.verse && verse.verse > 0) return verse.verse;
+    if (verse.number && verse.number > 0) return parseInt(verse.number, 10);
+    if (verse.verse && verse.verse > 0) return parseInt(verse.verse, 10);
     
     if (Array.isArray(verse.text)) {
       for (const item of verse.text) {
         if (typeof item === 'string') {
           const match = item.match(/^(\d+)/);
-          if (match) return parseInt(match[1]);
+          if (match) return parseInt(match[1], 10);
         }
       }
     }
     
     if (verse.number && typeof verse.number === 'object') {
-      return verse.number.number || 0;
+      return parseInt(verse.number.number || 0, 10);
     }
     
     return 0;
@@ -86,19 +86,47 @@ export default function ScripturePane({ scriptureData, isLoading = false, highli
         {scriptureData.verses.map((verse, index) => {
           const verseNumber = getVerseNumber(verse);
           const verseText = getVerseText(verse);
-          const isHighlighted = highlightVerse && verseNumber === highlightVerse;
+          
+          // Force conversion of variables to base-10 Integers to avoid string vs number matching failure
+          const parsedHighlightVerse = highlightVerse ? parseInt(highlightVerse, 10) : null;
+          const isHighlighted = parsedHighlightVerse !== null && verseNumber === parsedHighlightVerse;
           
           if (!verseText) return null;
           
           return (
             <div 
               key={index} 
-              className={`flex gap-2 leading-relaxed ${isHighlighted ? 'bg-purple-500/20 rounded-lg p-2 -mx-2 border-l-4 border-purple-500' : ''}`}
+              style={{
+                display: 'flex',
+                gap: '8px',
+                lineHeight: '1.8',
+                padding: isHighlighted ? '6px 10px' : '0',
+                margin: isHighlighted ? '0 -8px' : '0',
+                borderRadius: isHighlighted ? '8px' : '0',
+                backgroundColor: isHighlighted ? 'rgb(225, 171, 10)' : 'transparent',
+                transition: 'all 0.2s'
+              }}
             >
-              <sup className={`text-xs font-mono mt-0.5 min-w-[20px] text-right select-none ${isHighlighted ? 'text-purple-400 font-bold' : 'text-gray-500'}`}>
+              <sup 
+                style={{
+                  fontSize: '12px',
+                  marginTop: '2px',
+                  minWidth: '20px',
+                  textAlign: 'right',
+                  color: isHighlighted ? '#ffffff' : 'var(--text-muted, #6a6a6a)',
+                  fontWeight: isHighlighted ? 'bold' : 'normal',
+                  userSelect: 'none'
+                }}
+              >
                 {verseNumber || index + 1}
               </sup>
-              <span className={`${isHighlighted ? 'text-white font-medium' : 'text-gray-100'} font-serif text-[15px]`}>
+              <span 
+                style={{
+                  color: isHighlighted ? '#ffffff' : 'var(--text-primary, #e5e5e5)',
+                  fontSize: '15px',
+                  fontWeight: isHighlighted ? '500' : 'normal'
+                }}
+              >
                 {verseText}
               </span>
             </div>
