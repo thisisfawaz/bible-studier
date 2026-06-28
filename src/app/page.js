@@ -2019,7 +2019,12 @@ export default function Home() {
 
         <div className="sidebar-header">
           {activeTab === 'chat' ? (
-            <button className="new-chat-btn" onClick={startNewChat}>+ New Chat</button>
+            <button className="new-chat-btn" onClick={() => {
+              if (window.innerWidth < 768) {
+                setIsSidebarOpen(false);
+              }
+              startNewChat();
+            }}>+ New Chat</button>
           ) : activeTab === 'study' ? (
             <div className="sidebar-title">📖 Recent Scriptures</div>
           ) : (
@@ -2033,7 +2038,12 @@ export default function Home() {
               <div
                 key={session.id}
                 className={`session-item ${session.active ? 'active' : ''}`}
-                onClick={() => switchChat(session.id)}
+                onClick={() => {
+                  if (window.innerWidth < 768) {
+                    setIsSidebarOpen(false);
+                  }
+                  switchChat(session.id);
+                }}
               >
                 <span className="icon">💬</span>
                 <div className="session-info">
@@ -2078,6 +2088,11 @@ export default function Home() {
                         }
                       }
                       if (found) {
+                        // Close sidebar on mobile
+                        if (window.innerWidth < 768) {
+                          setIsSidebarOpen(false);
+                        }
+
                         isLoadingFromSidebarRef.current = true;
                         isNavigatingRef.current = true;
                         setStudyBook(found.id);
@@ -2104,7 +2119,12 @@ export default function Home() {
                 <div
                   key={devotionId}
                   className={`session-item ${selectedDevotionId === devotionId ? 'active' : ''}`}
-                  onClick={() => selectDevotion(devotionId)}
+                  onClick={() => {
+                    if (window.innerWidth < 768) {
+                      setIsSidebarOpen(false);
+                    }
+                    selectDevotion(devotionId);
+                  }}
                 >
                   <span className="icon">✨</span>
                   <div className="session-info">
